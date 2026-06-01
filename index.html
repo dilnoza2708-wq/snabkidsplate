@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -206,6 +207,10 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:var(--sf2);}
   </div>
 </div>
 
+<!-- Hidden file inputs -->
+<input type="file" id="file-input-s" accept=".xlsx,.xls" style="display:none" onchange="handleFile('s',this)">
+<input type="file" id="file-input-r" accept=".xlsx,.xls" style="display:none" onchange="handleFile('r',this)">
+
 <!-- QUANT SETTINGS -->
 <div class="up-overlay" id="quant-overlay">
   <div class="up-modal" style="width:420px;">
@@ -249,7 +254,7 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:var(--sf2);}
     </div>
     <div style="display:flex;justify-content:flex-end;gap:8px;">
       <button class="btn" onclick="document.getElementById('up-overlay').classList.remove('show')">Отмена</button>
-      <button class="btn g" onclick="document.getElementById('up-overlay').classList.remove('show');alert('Данные обновлены!')"><i class="ti ti-wand"></i> Загрузить и пересчитать</button>
+      <button class="btn g" onclick="confirmLoad()"><i class="ti ti-wand"></i> Загрузить и пересчитать</button>
     </div>
   </div>
 </div>
@@ -707,12 +712,303 @@ function downloadExcel(){
   URL.revokeObjectURL(a.href);
 }
 
-// ==================== UPLOAD ====================
-function fakeLoad(t){
-  const dz=document.getElementById('dz-'+t);
-  dz.classList.add('ok');
-  dz.querySelector('i').className='ti ti-circle-check';
-  dz.querySelector('.dz-t').textContent=t==='s'?'✓ Продажи':'✓ Остатки';
+// ==================== UPLOAD & FILE PARSING ====================
+
+const STORES_MAP = {
+  'Филиал Ц1': 'Ц1',
+  'Филиал Новомосковская': 'Новомосковская',
+  'Филиал Туркменская': 'Туркменская',
+  'Филиал Welcome baby': 'Welcome baby',
+  'Филиал Pharmed': 'Pharmed',
+};
+const OWN_CATS = new Set(['БАБУШКИНО ЛУКОШКО','FLEUR ALPINE','ФАБРИКА ОБЛАКОВ']);
+const GP_CAT = 'ГОТОВАЯ ПРОДУКЦИЯ';
+const SKIP_CATS = new Set([...OWN_CATS, GP_CAT, 'Услуги', 'ПРОЧИЕ']);
+const EXCL_KW = ['доставка','яндекс','май15','may15','1515','крафт','когоз','пакет'];
+const isExcl = n => EXCL_KW.some(k => n.toLowerCase().includes(k));
+
+let loadedSales = null, loadedStock = null;
+
+function fakeLoad(t) {
+  // trigger real file input
+  document.getElementById('file-input-' + t).click();
+}
+
+function handleFile(t, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dz = document.getElementById('dz-' + t);
+    dz.classList.add('ok');
+    dz.querySelector('i').className = 'ti ti-circle-check';
+    dz.querySelector('.dz-t').textContent = t === 's' ? '✓ ' + file.name : '✓ ' + file.name;
+    if (t === 's') loadedSales = e.target.result;
+    else loadedStock = e.target.result;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseSalesFile(ab) {
+  const wb = XLSX.read(ab, {type:'array', cellDates:false});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+
+  // Find date columns: row index 8 (0-based), cols starting at 6, step 2
+  const dateRow = data[8] || [];
+  const dateCols = []; // [{col, date}]
+  for (let j = 6; j < dateRow.length; j += 2) {
+    const v = dateRow[j];
+    if (v && String(v).includes('2026')) dateCols.push(j);
+  }
+  const nDays = dateCols.length;
+  const last7Start = Math.max(0, nDays - 7);
+
+  // Parse rows: row 11+ (index 11)
+  const sales = {}; // {art: {store, name, cat, qty_arr, sum_arr}}
+  let curCat = null, curStore = null;
+
+  for (let i = 11; i < data.length; i++) {
+    const row = data[i];
+    if (!row || !row[0]) continue;
+    const col0 = String(row[0]).trim();
+    const col4 = row[4];
+
+    if (col0.startsWith('Итого')) continue;
+
+    // Store row
+    const storeKey = col0 in STORES_MAP ? col0 : Object.keys(STORES_MAP).find(k => k.trim() === col0);
+    if (storeKey) { curStore = STORES_MAP[storeKey]; continue; }
+
+    // Item row
+    if (col4 != null && curStore) {
+      const art = String(col4).trim();
+      const name = col0;
+      if (isExcl(name)) continue;
+
+      let qty61 = 0, sum61 = 0, qty7 = 0, sum7 = 0;
+      for (let di = 0; di < nDays; di++) {
+        const qc = dateCols[di];
+        const sc = qc + 1;
+        const q = parseFloat(row[qc]) || 0;
+        const s = parseFloat(row[sc]) || 0;
+        qty61 += q; sum61 += s;
+        if (di >= last7Start) { qty7 += q; sum7 += s; }
+      }
+      if (qty61 === 0 && sum61 === 0) continue;
+
+      const key = art + '|' + curStore;
+      sales[key] = {art, name, cat: curCat||'', store: curStore, qty61, sum61, qty7, sum7};
+    } else if (col4 == null) {
+      if (!Object.keys(STORES_MAP).some(k => k.trim() === col0)) curCat = col0;
+      curStore = null;
+    }
+  }
+  return sales;
+}
+
+function parseStockFile(ab) {
+  const wb = XLSX.read(ab, {type:'array', cellDates:false});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+  // Structure: row 8 = header (col0=Артикул, col3=Наименование, col12=Ед, col16=Конечный остаток)
+  // Category rows: col3=null, col12=null
+  // Store rows: col0 = store name
+  // Item rows: col0=арт, col3=name, col12=ед, col16=qty
+
+  const stock = {}; // {art: {store: qty}}
+  let curCat = null, curStore = null;
+
+  for (let i = 8; i < data.length; i++) {
+    const row = data[i];
+    if (!row || row[0] == null) continue;
+    const col0 = String(row[0]).trim();
+    if (col0.startsWith('Итого') || col0 === 'Ед. изм.' || col0 === 'Артикул') continue;
+
+    const storeKey = Object.keys(STORES_MAP).find(k => k.trim() === col0);
+    if (storeKey) { curStore = STORES_MAP[storeKey]; continue; }
+
+    if (row[3] != null && row[12] != null) {
+      const art = col0;
+      const qty = parseFloat(row[16]) || 0;
+      if (!stock[art]) stock[art] = {};
+      if (curStore) stock[art][curStore] = qty;
+    } else {
+      if (!storeKey) { curCat = col0; curStore = null; }
+    }
+  }
+  return stock;
+}
+
+function processAndUpdate(salesData, stockData) {
+  // Build data structures same as Python backend
+  // 1. Aggregate sales
+  const byArtStore = {}; // {art: {store: {name,cat,qty61,sum61,qty7,sum7}}}
+  const byCat = {};
+
+  for (const key of Object.keys(salesData)) {
+    const r = salesData[key];
+    if (!byArtStore[r.art]) byArtStore[r.art] = {};
+    byArtStore[r.art][r.store] = r;
+    if (!byCat[r.cat]) byCat[r.cat] = [];
+    byCat[r.cat].push(r);
+  }
+
+  // ABC by sum61 across all stores
+  const artTotals = {};
+  for (const key of Object.keys(salesData)) {
+    const r = salesData[key];
+    if (!artTotals[r.art]) artTotals[r.art] = {name:r.name, cat:r.cat, sum61:0, qty61:0};
+    artTotals[r.art].sum61 += r.sum61;
+    artTotals[r.art].qty61 += r.qty61;
+  }
+  const sorted = Object.entries(artTotals).sort((a,b)=>b[1].sum61-a[1].sum61);
+  const totalRev = sorted.reduce((s,[,v])=>s+v.sum61,0);
+  let cum = 0;
+  const abcMap = {};
+  for (const [art,v] of sorted) {
+    cum += v.sum61/totalRev;
+    abcMap[art] = cum<=0.80?'A':cum<=0.95?'B':'C';
+  }
+
+  // GP: get potential sales
+  function getPotential(dailyArr) {
+    const active = dailyArr.filter(v=>v>0);
+    if (!active.length) return 0;
+    const avgActive = active.reduce((s,v)=>s+v,0)/active.length;
+    const threshold = avgActive*0.3;
+    const firstSale = dailyArr.findIndex(v=>v>0);
+    let potSum = 0;
+    for (let i=0;i<dailyArr.length;i++) {
+      potSum += (i<firstSale)?dailyArr[i]:(dailyArr[i]===0||dailyArr[i]<threshold)?avgActive:dailyArr[i];
+    }
+    return potSum/dailyArr.length;
+  }
+
+  // Rebuild _B1 (GP)
+  const newGP = {stores:{'Ц1':[],'Новомосковская':[],'Туркменская':[],'Welcome baby':[]}};
+  const pharmedStock = stockData;
+
+  for (const key of Object.keys(salesData)) {
+    const r = salesData[key];
+    if (r.cat !== GP_CAT) continue;
+    const bstock = (stockData[r.art]||{})[r.store]||0;
+    // Simple: use avg daily since we don't have daily breakdown in this simplified parse
+    const avgDay = r.qty61/61;
+    const pot = avgDay; // simplified - no stockout detection in browser version
+    if (pot <= 0) continue;
+    const q = getQuant(r.name);
+    const rawOrder = pot * DAYS;
+    const order = q>1 ? Math.ceil(rawOrder/q)*q : Math.ceil(rawOrder);
+    if (order <= 0) continue;
+    const uplift = 0; // simplified
+    newGP.stores[r.store].push({
+      a:r.art, n:r.name.length>50?r.name.slice(0,50)+'…':r.name,
+      pot:Math.round(pot*1000)/1000, pot7:Math.round(pot*7),
+      sum7:Math.round(r.sum7/1000), bstock:Math.round(bstock*10)/10,
+      order, quant:q, uplift, abc:abcMap[r.art]||'C'
+    });
+  }
+  for (const st of Object.keys(newGP.stores)) {
+    newGP.stores[st].sort((a,b)=>b.sum7-a.sum7);
+  }
+
+  // Rebuild external suppliers block
+  // ... (simplified for browser - main logic)
+  const extByArt = {};
+  for (const key of Object.keys(salesData)) {
+    const r = salesData[key];
+    if (r.cat===GP_CAT||OWN_CATS.has(r.cat)||SKIP_CATS.has(r.cat)) continue;
+    if (!extByArt[r.art]) extByArt[r.art] = {name:r.name,cat:r.cat,sum61:0,sum7:0,qty61:0,stores:{}};
+    extByArt[r.art].sum61+=r.sum61; extByArt[r.art].sum7+=r.sum7; extByArt[r.art].qty61+=r.qty61;
+    extByArt[r.art].stores[r.store]={sum7:r.sum7,qty61:r.qty61};
+  }
+
+  const pharmed_s = stockData;
+  const supDetail = {};
+  const supRev = {};
+  for (const art of Object.keys(extByArt)) {
+    const v = extByArt[art];
+    const ph = (pharmed_s[art]||{})['Pharmed']||0;
+    const prog2w = Math.ceil(v.qty61/61*14);
+    if (prog2w <= ph) continue;
+    const order = Math.ceil(prog2w - ph);
+    if (!supDetail[v.cat]) supDetail[v.cat]=[];
+    if (!supRev[v.cat]) supRev[v.cat]=0;
+    supRev[v.cat]+=v.sum7;
+    const storesDict={};
+    for (const st of Object.keys(v.stores)) {
+      const sr = v.stores[st];
+      const branchSt=(stockData[art]||{})[st]||0;
+      const stProg=Math.ceil(sr.qty61/61*14);
+      const stOrder=Math.max(0,stProg-branchSt);
+      if(stOrder>0||stProg>0) storesDict[st]={o:stOrder||stProg,s:Math.round(branchSt),r:Math.round(sr.sum7/1000)};
+    }
+    supDetail[v.cat].push({a:art,n:v.name.length>50?v.name.slice(0,50)+'…':v.name,
+      sum7:Math.round(v.sum7/1000),pharmed:Math.round(ph),order,abc:abcMap[art]||'C',stores:storesDict});
+  }
+  for (const cat of Object.keys(supDetail)) supDetail[cat].sort((a,b)=>b.sum7-a.sum7);
+  const supSummary=Object.entries(supRev).sort((a,b)=>b[1]-a[1]).map(([name,rev7])=>({name,items:(supDetail[name]||[]).length,rev7:Math.round(rev7/1000)}));
+
+  // Own dist
+  const ownStores={'Ц1':[],'Новомосковская':[],'Туркменская':[],'Welcome baby':[]};
+  const brandMap={'БАБУШКИНО ЛУКОШКО':'Бабушкино лукошко','FLEUR ALPINE':'Флёр Альпин','ФАБРИКА ОБЛАКОВ':'Зёвушка (Кокон)'};
+  for (const key of Object.keys(salesData)) {
+    const r = salesData[key];
+    if (!OWN_CATS.has(r.cat)) continue;
+    const avgDay=r.qty61/61;
+    const target10=Math.ceil(avgDay*10), max14=Math.ceil(avgDay*14);
+    const bstock=(stockData[r.art]||{})[r.store]||0;
+    const ph=(stockData[r.art]||{})['Pharmed']||0;
+    const brand=brandMap[r.cat]||r.cat;
+    const q=getBrandQuant(brand);
+    let rawOrder=Math.max(0,Math.min(max14-bstock,target10-bstock));
+    if(rawOrder<=0) continue;
+    const order=q>1?Math.ceil(rawOrder/q)*q:Math.ceil(rawOrder);
+    const src=ph>=order?'Pharmed':'Заказ дистр.';
+    ownStores[r.store].push({a:r.art,b:brand,n:r.name.length>50?r.name.slice(0,50)+'…':r.name,
+      pot7:Math.round(avgDay*7),sum7:Math.round(r.sum7/1000),bstock:Math.round(bstock),
+      pharmed:Math.round(ph),target10,quant:q,order,src});
+  }
+  for (const st of Object.keys(ownStores)) ownStores[st].sort((a,b)=>b.sum7-a.sum7);
+
+  // UPDATE GLOBAL DATA
+  Object.assign(_B1, newGP);
+  Object.assign(_B2, {dispatch:_B2.dispatch, sup_summary:supSummary.slice(0,30), sup_detail:Object.fromEntries(Object.entries(supDetail).map(([k,v])=>[k,v.slice(0,20)]))});
+  Object.assign(_B3, {stores:ownStores, brands:_B3.brands});
+
+  // Rebuild sidebar and re-render
+  buildSB();
+  render(page);
+  document.getElementById('up-overlay').classList.remove('show');
+
+  // Update period chip
+  const keys = Object.keys(salesData);
+  if (keys.length) {
+    const chip = document.querySelector('.chip');
+    if (chip) chip.textContent = 'Данные обновлены ✓';
+  }
+  alert(`✓ Данные загружены!\n• ГП: ${Object.values(newGP.stores).flat().length} позиций\n• Внешние: ${supSummary.length} поставщиков\n• Дистрибуция: ${Object.values(ownStores).flat().length} позиций`);
+}
+
+function getBrandQuant(brand) {
+  if (brand==='Бабушкино лукошко') return QUANTS['бабушкино']||6;
+  return 1;
+}
+
+function confirmLoad() {
+  if (!loadedSales || !loadedStock) {
+    alert('Загрузите оба файла: Продажи и Остатки');
+    return;
+  }
+  try {
+    const salesData = parseSalesFile(loadedSales);
+    const stockData = parseStockFile(loadedStock);
+    processAndUpdate(salesData, stockData);
+  } catch(e) {
+    console.error(e);
+    alert('Ошибка при обработке файлов: ' + e.message);
+  }
 }
 
 // ==================== INIT ====================
