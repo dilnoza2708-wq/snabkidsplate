@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kids Plate — Закупки</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --g: #1a6b4a; --g1: #145538; --g2: #0e3d28; --gl: rgba(26,107,74,0.09);
+  --r: #c0392b; --rl: rgba(192,57,43,0.09);
+  --o: #d97706; --ol: rgba(217,119,6,0.09);
+  --b: #1d4ed8; --bl: rgba(29,78,216,0.09);
+  --bg: #f7f6f2; --surface: #ffffff; --surface2: #f2f0eb;
+  --border: rgba(0,0,0,0.08); --border2: rgba(0,0,0,0.14);
+  --text: #18181b; --muted: #71717a; --hint: #a1a1aa;
+  --rad: 8px; --rad-lg: 14px; --rad-xl: 20px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08);
+  --font: 'Geologica', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111110; --surface: #1a1917; --surface2: #222120;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --text: #e8e6e1; --muted: #8a8784; --hint: #5c5a57;
+    --gl: rgba(26,107,74,0.16); --rl: rgba(192,57,43,0.14);
+    --ol: rgba(217,119,6,0.12); --bl: rgba(29,78,216,0.14);
+  }
+}
+html, body { height: 100%; }
+body { font-family: var(--font); font-size: 13px; background: var(--bg); color: var(--text); overflow: hidden; display: flex; flex-direction: column; }
+
+/* TOPBAR */
+.topbar { height: 50px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 16px; flex-shrink: 0; }
+.logo-mark { width: 32px; height: 32px; background: var(--g2); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.logo-mark svg { width: 18px; height: 18px; fill: #fff; }
+.logo-text { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; color: var(--g); }
+.logo-sep { width: 1px; height: 20px; background: var(--border2); }
+.period-pill { font-size: 11px; color: var(--muted); background: var(--surface2); padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); font-family: var(--mono); }
+.topbar-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* TABS */
+.stream-tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.stream-tab { flex: 1; padding: 0 16px; height: 46px; display: flex; align-items: center; gap: 10px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--muted); font-size: 12.5px; font-weight: 400; transition: all .15s; user-select: none; }
+.stream-tab:hover { color: var(--text); background: var(--surface2); }
+.stream-tab.act { font-weight: 500; color: var(--text); }
+.stream-tab.gp.act { border-color: var(--g); color: var(--g); }
+.stream-tab.ext.act { border-color: var(--r); color: var(--r); }
+.stream-tab.own.act { border-color: var(--b); color: var(--b); }
+.tab-badge { font-size: 10px; padding: 1px 7px; border-radius: 20px; font-family: var(--mono); font-weight: 500; }
+.gp .tab-badge { background: var(--gl); color: var(--g); }
+.ext .tab-badge { background: var(--rl); color: var(--r); }
+.own .tab-badge { background: var(--bl); color: var(--b); }
+.tab-icon { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.gp .tab-icon { background: var(--gl); color: var(--g); }
+.ext .tab-icon { background: var(--rl); color: var(--r); }
+.own .tab-icon { background: var(--bl); color: var(--b); }
+.tab-info { line-height: 1.3; }
+.tab-title { font-size: 12.5px; }
+.tab-sub { font-size: 10px; color: var(--muted); }
+
+/* LAYOUT */
+.app-body { flex: 1; overflow: hidden; display: flex; }
+.sidebar { width: 196px; min-width: 196px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; flex-shrink: 0; }
+.sidebar-section { padding: 14px 10px 6px; }
+.sidebar-label { font-size: 9.5px; font-weight: 600; color: var(--hint); text-transform: uppercase; letter-spacing: .6px; padding: 0 6px 4px; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 2px; transition: all .12s; user-select: none; }
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.act { background: var(--gl); color: var(--g); font-weight: 500; }
+.nav-item i { font-size: 15px; flex-shrink: 0; }
+.nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-cnt { font-size: 10px; font-family: var(--mono); background: var(--surface2); padding: 1px 6px; border-radius: 10px; color: var(--muted); }
+.nav-item.act .nav-cnt { background: rgba(26,107,74,0.14); color: var(--g); }
+.nav-cnt.red { background: var(--rl); color: var(--r); }
+.nav-cnt.blue { background: var(--bl); color: var(--b); }
+
+/* MAIN */
+.main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.pagebar { height: 46px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; justify-content: space-between; flex-shrink: 0; }
+.page-title { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; }
+.page-sub { font-size: 11px; color: var(--muted); }
+.content { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.page { display: none; }
+.page.act { display: block; }
+
+/* COMPONENTS */
+.metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rad-lg); padding: 12px 14px; box-shadow: var(--shadow); }
+.metric-label { font-size: 10.5px; color: var(--muted); margin-bottom: 4px; }
+.metric-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
+.metric-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.metric.green .metric-value { color: var(--g); }
+.metric.red .metric-value { color: var(--r); }
+.metric.amber .metric-value { color: var(--o); }
+.metric.blue .metric-value { color: var(--b); }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rad-lg); margin-bottom: 12px; overflow: hidden; box-shadow: var(--shadow); }
+.card-header { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; min-height: 42px; }
+.card-title { font-size: 13px; font-weight: 500; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 6px 10px; font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--border); font-size: 10.5px; white-space: nowrap; background: var(--surface); position: sticky; top: 0; z-index: 2; }
+td { padding: 5px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; line-height: 1.35; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+.tbl-scroll { overflow-x: auto; max-height: 400px; overflow-y: auto; }
+
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: var(--rad); border: 1px solid var(--border2); background: transparent; cursor: pointer; font-size: 12px; color: var(--text); font-family: var(--font); font-weight: 500; transition: all .13s; white-space: nowrap; }
+.btn:hover { background: var(--surface2); }
+.btn.sm { padding: 4px 9px; font-size: 11.5px; }
+.btn.green { background: var(--g); color: #fff; border-color: var(--g); }
+.btn.green:hover { background: var(--g1); }
+.btn.red { background: var(--r); color: #fff; border-color: var(--r); }
+.btn.blue { background: var(--b); color: #fff; border-color: var(--b); }
+.btn i { font-size: 14px; }
+
+.sel { padding: 5px 9px; border: 1px solid var(--border2); border-radius: var(--rad); font-size: 12px; background: var(--surface); color: var(--text); font-family: var(--font); cursor: pointer; }
+.inp { padding: 4px 7px; border: 1px solid var(--border2); border-radius: 5px; font-size: 12px; width: 54px; background: var(--surface); color: var(--text); font-family: var(--mono); }
+.inp:focus { outline: none; border-color: var(--g); }
+.inp.urgent { border-color: var(--r); }
+
+.frow { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.action-bar { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+.badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 500; white-space: nowrap; }
+.badge.A { background: #e8f5ef; color: #1a6b4a; }
+.badge.B { background: #fef3c7; color: #92400e; }
+.badge.C { background: #fee2e2; color: #991b1b; }
+.brand-badge { padding: 1px 7px; border-radius: 20px; font-size: 10.5px; font-weight: 500; }
+.brand-bl { background: var(--gl); color: var(--g); }
+.brand-fa { background: rgba(29,78,216,.08); color: var(--b); }
+.brand-kk { background: rgba(107,33,168,.07); color: #6b21a8; }
+
+.alert-box { padding: 9px 14px; border-radius: var(--rad); margin-bottom: 12px; display: flex; align-items: flex-start; gap: 10px; font-size: 12px; }
+.alert-box i { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.alert-warn { background: var(--ol); border: 1px solid rgba(217,119,6,.25); color: #92400e; }
+.alert-info { background: var(--gl); border: 1px solid rgba(26,107,74,.2); color: var(--g2); }
+.alert-danger { background: var(--rl); border: 1px solid rgba(192,57,43,.2); color: #991b1b; }
+
+.neg { color: var(--r); font-weight: 600; }
+.pos-val { color: var(--g); font-weight: 500; }
+.blue-val { color: var(--b); font-weight: 500; }
+.art-id { font-family: var(--mono); font-size: 10px; color: var(--hint); }
+.order-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 600; font-family: var(--mono); background: var(--gl); color: var(--g); border: 1px solid rgba(26,107,74,.2); }
+.order-tag.urgent { background: var(--rl); color: var(--r); border-color: rgba(192,57,43,.2); }
+
+/* SUPPLIER CARDS */
+.sup-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rad-lg); margin-bottom: 8px; overflow: hidden; box-shadow: var(--shadow); }
+.sup-card-head { padding: 10px 14px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background .12s; }
+.sup-card-head:hover { background: var(--surface2); }
+.sup-card-icon { width: 34px; height: 34px; border-radius: 8px; background: var(--rl); display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--r); flex-shrink: 0; }
+.sup-name { font-size: 13px; font-weight: 500; }
+.sup-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.sup-stats { margin-left: auto; text-align: right; flex-shrink: 0; }
+.sup-rev7 { font-size: 13px; font-weight: 600; color: var(--r); font-family: var(--mono); }
+.sup-items-cnt { font-size: 10.5px; color: var(--muted); }
+.sup-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.sup-body { display: none; border-top: 1px solid var(--border); }
+.sup-body.open { display: block; }
+.chevron { font-size: 14px; color: var(--muted); transition: transform .2s; }
+.chevron.open { transform: rotate(180deg); }
+
+/* UPLOAD OVERLAY */
+.upload-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; align-items: center; justify-content: center; }
+.upload-overlay.show { display: flex; }
+.upload-modal { background: var(--surface); border-radius: var(--rad-xl); padding: 28px; width: 480px; box-shadow: var(--shadow-lg); }
+.upload-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.upload-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+.drop-zone { border: 1.5px dashed var(--border2); border-radius: var(--rad-lg); padding: 28px; text-align: center; cursor: pointer; transition: all .14s; }
+.drop-zone:hover, .drop-zone.over { border-color: var(--g); background: var(--gl); }
+.drop-zone i { font-size: 32px; color: var(--muted); display: block; margin-bottom: 10px; }
+.drop-zone-label { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.drop-zone-sub { font-size: 11px; color: var(--muted); }
+.upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.file-loaded { border-color: var(--g); background: var(--gl); }
+.file-loaded i { color: var(--g); }
+
+@media (prefers-color-scheme: dark) {
+  .badge.A { background: rgba(26,107,74,.2); color: #4ade80; }
+  .badge.B { background: rgba(217,119,6,.15); color: #fcd34d; }
+  .badge.C { background: rgba(192,57,43,.15); color: #f87171; }
+  .brand-bl { background: rgba(26,107,74,.18); color: #4ade80; }
+  .brand-fa { background: rgba(29,78,216,.15); color: #93c5fd; }
+  .brand-kk { background: rgba(107,33,168,.15); color: #c084fc; }
+  .alert-warn { background: rgba(217,119,6,.1); border-color: rgba(217,119,6,.2); color: #fcd34d; }
+  .alert-info { background: rgba(26,107,74,.12); border-color: rgba(26,107,74,.2); color: #4ade80; }
+  .alert-danger { background: rgba(192,57,43,.12); border-color: rgba(192,57,43,.2); color: #f87171; }
+}
+
+.chart-wrap { position: relative; }
+.grid-2 { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo-mark">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+  </div>
+  <span class="logo-text">Kids Plate</span>
+  <div class="logo-sep"></div>
+  <span class="period-pill">01.04 – 31.05.2026</span>
+  <span class="period-pill">Pharmed = Центральный склад</span>
+  <div class="topbar-right">
+    <button class="btn" onclick="document.querySelector('.upload-overlay').classList.add('show')"><i class="ti ti-upload"></i> Загрузить данные</button>
+    <button class="btn" onclick="exportCurrent()"><i class="ti ti-download"></i> Экспорт CSV</button>
+  </div>
+</div>
+
+<!-- STREAM TABS -->
+<div class="stream-tabs">
+  <div class="stream-tab gp act" onclick="switchStream('gp',this)">
+    <div class="tab-icon"><i class="ti ti-chef-hat"></i></div>
+    <div class="tab-info">
+      <div class="tab-title">Готовая продукция</div>
+      <div class="tab-sub">Заказ 4× в неделю · прогноз на 2 дня</div>
+    </div>
+    <span class="tab-badge">601 М</span>
+  </div>
+  <div class="stream-tab ext" onclick="switchStream('ext',this)">
+    <div class="tab-icon"><i class="ti ti-truck"></i></div>
+    <div class="tab-info">
+      <div class="tab-title">Внешние поставщики</div>
+      <div class="tab-sub">57 поставщиков · заказ 2× в неделю</div>
+    </div>
+    <span class="tab-badge">464 М</span>
+  </div>
+  <div class="stream-tab own" onclick="switchStream('own',this)">
+    <div class="tab-icon"><i class="ti ti-building-store"></i></div>
+    <div class="tab-info">
+      <div class="tab-title">Своя дистрибуция</div>
+      <div class="tab-sub">Бабушкино лукошко · Флёр Альпин · Зёвушка</div>
+    </div>
+    <span class="tab-badge">212 М</span>
+  </div>
+</div>
+
+<!-- BODY -->
+<div class="app-body">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <!-- populated by JS -->
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main">
+    <div class="pagebar">
+      <div><div class="page-title" id="page-title">Дашборд</div><div class="page-sub" id="page-sub"></div></div>
+      <div style="display:flex;gap:6px;" id="page-actions"></div>
+    </div>
+    <div class="content" id="content">
+      <!-- pages rendered by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD OVERLAY -->
+<div class="upload-overlay">
+  <div class="upload-modal">
+    <div class="upload-title">Загрузить данные из 1С</div>
+    <div class="upload-sub">После загрузки все три потока обновятся автоматически</div>
+    <div class="upload-row">
+      <div class="drop-zone" id="dz-sales" onclick="fakeLoad('sales')">
+        <i class="ti ti-file-spreadsheet"></i>
+        <div class="drop-zone-label">Продажи</div>
+        <div class="drop-zone-sub">Продажи_Клауд.xlsx</div>
+      </div>
+      <div class="drop-zone" id="dz-stock" onclick="fakeLoad('stock')">
+        <i class="ti ti-table"></i>
+        <div class="drop-zone-label">Остатки</div>
+        <div class="drop-zone-sub">Остатки_клауд.xlsx</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" onclick="document.querySelector('.upload-overlay').classList.remove('show')">Отмена</button>
+      <button class="btn green" id="load-btn" onclick="confirmLoad()"><i class="ti ti-wand"></i> Загрузить и пересчитать</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== DATA =====================
+const D = {"gp":{"metrics":{"total_lines":58,"neg_stock":25,"total_rev_m":601.0,"abc":{"A":32,"B":20,"C":22}},"stores":{"Ц1":[{"a":"408","n":"Печенье Органик Первое с яблочным соком Fleur Alpine","d":0.8,"q":26,"r":2017,"s":5,"o":0},{"a":"10820","n":"Котлеты из телятины, 180 гр","d":0.7,"q":14,"r":1201,"s":10,"o":0},{"a":"11599","n":"Kabrita 1 GOLD 400 гр смесь","d":0.1,"q":4,"r":1198,"s":0,"o":0.2},{"a":"11597","n":"Kabrita 1 GOLD 800 гр смесь","d":0.1,"q":2,"r":1079,"s":2,"o":0},{"a":"11600","n":"Kabrita 2 GOLD 800 гр смесь 6+","d":0.1,"q":2,"r":1079,"s":2,"o":0},{"a":"100187","n":"Family plate ЧУЧВАРА из телятины и баранины 500г","d":0.3,"q":4,"r":504,"s":0,"o":0.5},{"a":"4913","n":"Трусики JOONIES Premium Soft XL 38","d":0.1,"q":2,"r":558,"s":2,"o":0},{"a":"11398","n":"Трусики-подгузники MERRIES р-р XL","d":0.1,"q":2,"r":600,"s":0,"o":0.1},{"a":"11601","n":"Kabrita 3 GOLD 800 гр напиток 12+","d":0.1,"q":1,"r":539,"s":2,"o":0},{"a":"100614","n":"Флёр Альпин - каша Органик Овсяно-кукурузная","d":0.1,"q":4,"r":361,"s":3,"o":0},{"a":"10843","n":"Флёр Альпин - каша Органик кукурузная","d":0.1,"q":4,"r":360,"s":2,"o":0},{"a":"10784","n":"Fleur Alpine каша Органик Овсяная 5 мес 175г","d":0.1,"q":4,"r":351,"s":0,"o":0.2},{"a":"4998","n":"Бабушкино лукошко рагу овощное с индейкой 100г","d":0.3,"q":12,"r":331,"s":9,"o":0},{"a":"42","n":"Бабушкино лукошко Пюре из груш с творогом 100г","d":0.4,"q":13,"r":315,"s":10,"o":0},{"a":"10205","n":"Бабушкино лукошко Пюре из цыпленка 100г","d":0.2,"q":9,"r":333,"s":7,"o":0},{"a":"101172","n":"Family Plate Пирог Курник 700 гр","d":0.1,"q":4,"r":271,"s":-2,"o":2.3},{"a":"101017","n":"Kabrita Пшеничная каша Банан-Яблоко 6+","d":0.1,"q":3,"r":260,"s":-1,"o":1.2},{"a":"40","n":"Бабушкино лукошко Пюре из яблок с творогом 100г","d":0.3,"q":10,"r":242,"s":1,"o":0},{"a":"101380","n":"Family plate Куриные котлеты 6 шт 390 гр","d":0.2,"q":5,"r":314,"s":3,"o":0},{"a":"101916","n":"Kid's Plate сосиски детские 200 гр","d":0.3,"q":7,"r":308,"s":7,"o":0},{"a":"11827","n":"Пюре цветная капуста с кроликом 100г","d":0.2,"q":8,"r":281,"s":0,"o":0.4},{"a":"101174","n":"Family Plate Блинчики с курицей 260 гр","d":0.1,"q":2,"r":89,"s":-2,"o":2.4},{"a":"4797","n":"Печенье Органик Банановое Fleur Alpine","d":0.3,"q":10,"r":790,"s":12,"o":0},{"a":"10203","n":"Бабушкино лукошко Пюре из говядины 100г","d":0.3,"q":4,"r":164,"s":0,"o":0.5},{"a":"12351","n":"Сырники замороженные 180 гр","d":0.5,"q":6,"r":269,"s":7,"o":0}],"Новомосковская":[{"a":"10429","n":"Котлеты из лосося 2 шт, 90 гр","d":1.6,"q":21,"r":1352,"s":21,"o":0},{"a":"10433","n":"Котлеты из индейки 4 шт, 180 гр","d":1.2,"q":13,"r":1294,"s":7,"o":0},{"a":"10152","n":"Котлеты из кролика 4 шт, 180 гр","d":2.2,"q":19,"r":1394,"s":-3,"o":9.4},{"a":"2225","n":"Kabrita 4 GOLD 800 гр напиток 3+","d":0.1,"q":2,"r":1079,"s":0,"o":0.2},{"a":"11601","n":"Kabrita 3 GOLD 800 гр напиток 12+","d":0.1,"q":2,"r":1073,"s":0,"o":0.2},{"a":"11043","n":"Пельмени простые из телятины, 300 гр","d":0.8,"q":12,"r":1029,"s":6,"o":0},{"a":"102003","n":"Яйца домашнего хозяйства Расулов Н., 10 шт","d":0.9,"q":17,"r":994,"s":-10,"o":11.1},{"a":"2258","n":"Котлеты из курицы 4шт, 180гр","d":2.1,"q":22,"r":877,"s":-2,"o":8.7},{"a":"10613","n":"Фрикадельки из кролика 10 шт 100 гр","d":1.3,"q":17,"r":825,"s":12,"o":0},{"a":"10500","n":"Лаваш с брынзой 14 шт 250 гр","d":0.7,"q":16,"r":811,"s":10,"o":0},{"a":"10815","n":"Пельмени цветные из телятины, 200гр","d":1.0,"q":10,"r":800,"s":10,"o":0},{"a":"4931","n":"Наггетсы куриные 200 гр","d":0.9,"q":17,"r":762,"s":15,"o":0},{"a":"10628","n":"Фрикадельки из индейки, 100гр","d":1.0,"q":11,"r":658,"s":14,"o":0},{"a":"12351","n":"Сырники замороженные 180 гр","d":1.1,"q":14,"r":657,"s":4,"o":0.3},{"a":"10820","n":"Котлеты из телятины, 180 гр","d":0.7,"q":7,"r":569,"s":12,"o":0},{"a":"100671","n":"Тефтели из телятины, 200 гр (8шт)","d":0.5,"q":7,"r":510,"s":12,"o":0},{"a":"10819","n":"Фрикадельки из телятины, 100гр","d":0.8,"q":9,"r":493,"s":16,"o":0},{"a":"100750","n":"Пельмени цветные из курицы, 200 гр","d":1.0,"q":10,"r":474,"s":-6,"o":8.9},{"a":"12124","n":"Фрикадельки из лосося, 100гр","d":0.8,"q":8,"r":470,"s":12,"o":0},{"a":"4995","n":"Бабушкино лукошко рагу с говядиной 100г","d":0.6,"q":16,"r":442,"s":2,"o":0},{"a":"100459","n":"Family plate лаваш с моцареллой и зеленью","d":0.4,"q":8,"r":405,"s":5,"o":0},{"a":"1134","n":"Family Plate Блинчики с мясом 4 шт 240 гр","d":0.2,"q":6,"r":405,"s":4,"o":0}],"Туркменская":[{"a":"10429","n":"Котлеты из лосося 2 шт, 90 гр","d":1.5,"q":16,"r":1024,"s":10,"o":0},{"a":"11043","n":"Пельмени простые из телятины, 300 гр","d":0.8,"q":10,"r":894,"s":5,"o":0},{"a":"4931","n":"Наггетсы куриные 200 гр","d":1.1,"q":13,"r":572,"s":7,"o":0},{"a":"4913","n":"Трусики JOONIES Premium Soft XL 38","d":0.1,"q":2,"r":558,"s":0,"o":0.1},{"a":"10819","n":"Фрикадельки из телятины, 100гр","d":0.7,"q":8,"r":437,"s":3,"o":0},{"a":"100669","n":"Тефтели из кролика 200гр (8шт)","d":0.4,"q":5,"r":332,"s":8,"o":0},{"a":"10820","n":"Котлеты из телятины, 180 гр","d":0.4,"q":4,"r":324,"s":1,"o":1.2},{"a":"10628","n":"Фрикадельки из индейки, 100гр","d":0.5,"q":5,"r":310,"s":10,"o":0},{"a":"12124","n":"Фрикадельки из лосося, 100гр","d":0.5,"q":5,"r":276,"s":16,"o":0},{"a":"101916","n":"Kid's Plate сосиски детские 200 гр","d":0.4,"q":6,"r":276,"s":0,"o":1.1},{"a":"10500","n":"Лаваш с брынзой 14 шт 250 гр","d":0.5,"q":5,"r":252,"s":8,"o":0},{"a":"100187","n":"Family plate ЧУЧВАРА из телятины и баранины","d":0.2,"q":2,"r":252,"s":-1,"o":1.8},{"a":"10613","n":"Фрикадельки из кролика 10 шт 100 гр","d":0.6,"q":5,"r":240,"s":9,"o":0},{"a":"12351","n":"Сырники замороженные 180 гр","d":0.5,"q":5,"r":230,"s":5,"o":0},{"a":"10152","n":"Котлеты из кролика 4 шт, 180 гр","d":0.5,"q":3,"r":216,"s":-3,"o":6.1},{"a":"2258","n":"Котлеты из курицы 4шт, 180гр","d":0.5,"q":5,"r":203,"s":6,"o":0},{"a":"3162","n":"Котлеты из судака 2шт, 90гр","d":0.8,"q":2,"r":104,"s":-5,"o":9.5},{"a":"4152","n":"Вареники с картошкой, 250 гр","d":0.5,"q":5,"r":192,"s":4,"o":0}],"Welcome baby":[{"a":"10429","n":"Котлеты из лосося 2 шт, 90 гр","d":1.7,"q":18,"r":1165,"s":4,"o":0.1},{"a":"4931","n":"Наггетсы куриные 200 гр","d":0.8,"q":15,"r":640,"s":-6,"o":8.4},{"a":"100714","n":"МАМАКО 2 Premium с 2'FL 6-12 мес 800г","d":0.1,"q":1,"r":575,"s":0,"o":0.1},{"a":"10628","n":"Фрикадельки из индейки, 100гр","d":0.6,"q":9,"r":531,"s":1,"o":1.4},{"a":"10616","n":"Пельмени цветные из кролика, 200 гр","d":0.4,"q":7,"r":496,"s":6,"o":0},{"a":"10613","n":"Фрикадельки из кролика 10 шт 100 гр","d":0.8,"q":10,"r":475,"s":-1,"o":5.3},{"a":"10152","n":"Котлеты из кролика 4 шт, 180 гр","d":0.7,"q":6,"r":420,"s":-2,"o":4.7},{"a":"2258","n":"Котлеты из курицы 4шт, 180гр","d":0.8,"q":10,"r":394,"s":1,"o":0.6},{"a":"100669","n":"Тефтели из кролика 200гр (8шт)","d":0.4,"q":6,"r":390,"s":14,"o":0},{"a":"4772","n":"Фрикадельки из курицы 15 шт 150 гр","d":0.6,"q":8,"r":256,"s":1,"o":0.5},{"a":"12124","n":"Фрикадельки из лосося, 100гр","d":0.4,"q":4,"r":234,"s":10,"o":0},{"a":"10203","n":"Бабушкино лукошко Пюре из говядины 100г","d":0.3,"q":6,"r":218,"s":3,"o":0},{"a":"10819","n":"Фрикадельки из телятины, 100гр","d":0.2,"q":3,"r":165,"s":13,"o":0},{"a":"10820","n":"Котлеты из телятины, 180 гр","d":0.2,"q":2,"r":158,"s":8,"o":0},{"a":"101915","n":"Kid's Plate Сосиски детские 100 гр","d":0.4,"q":6,"r":156,"s":11,"o":0},{"a":"12351","n":"Сырники замороженные 180 гр","d":0.3,"q":3,"r":138,"s":4,"o":0}]},"critical":[{"n":"Яйца дом. хоз-ва Расулов Н., 10 шт","st":"Новомосковская","s":-10,"d":0.9,"o":11.1,"r":994},{"n":"Котлеты из кролика 4 шт, 180 гр","st":"Новомосковская","s":-3,"d":2.2,"o":9.4,"r":1394},{"n":"Котлеты из судака 2шт, 90гр","st":"Туркменская","s":-5,"d":0.8,"o":9.5,"r":104},{"n":"Котлеты из курицы 4шт, 180гр","st":"Новомосковская","s":-2,"d":2.1,"o":8.7,"r":877},{"n":"Пельмени цветные из курицы, 200 гр","st":"Новомосковская","s":-6,"d":1.0,"o":8.9,"r":474},{"n":"Наггетсы куриные 200 гр","st":"Welcome baby","s":-6,"d":0.8,"o":8.4,"r":640},{"n":"Котлеты из кролика 4 шт, 180 гр","st":"Туркменская","s":-3,"d":0.5,"o":6.1,"r":216},{"n":"Фрикадельки из кролика 10 шт 100 гр","st":"Welcome baby","s":-1,"d":0.8,"o":5.3,"r":475},{"n":"Котлеты из кролика 4 шт, 180 гр","st":"Welcome baby","s":-2,"d":0.7,"o":4.7,"r":420},{"n":"Family plate ЧУЧВАРА телятина баранина","st":"Туркменская","s":-1,"d":0.2,"o":1.8,"r":252},{"n":"Family Plate Пирог Курник 700 гр","st":"Ц1","s":-2,"d":0.1,"o":2.3,"r":271},{"n":"Family Plate Блинчики с курицей 260 гр","st":"Ц1","s":-2,"d":0.1,"o":2.4,"r":89},{"n":"Kabrita Пшеничная каша Банан-Яблоко 6+","st":"Ц1","s":-1,"d":0.1,"o":1.2,"r":260}]},"ext":{"metrics":{"total_lines":755,"suppliers":57,"rev61":463.5,"rev7":44.6},"suppliers":[{"name":"KABRITA","items":29,"rev7":9922,"rev61":109200},{"name":"JOONIES \"Mari Pharm\" и \"Univation\"","items":15,"rev7":1275,"rev61":29070},{"name":"Фруто Няня и Вода Боржоми \"Sayonar\"","items":29,"rev7":1045,"rev61":19229},{"name":"Kim&Kimmy \"Baby Pro\"","items":7,"rev7":1040,"rev61":19152},{"name":"TOMIKO \"MEDICINE INVESTMENT\" MCHJ","items":11,"rev7":951,"rev61":45526},{"name":"Semper \"Stoneville\"","items":11,"rev7":728,"rev61":2766},{"name":"BIBS","items":18,"rev7":696,"rev61":5771},{"name":"GERBER \"BALTON TRADING\"","items":20,"rev7":694,"rev61":8969},{"name":"Когда Я вырасту Печенье Omega Company","items":17,"rev7":690,"rev61":8138},{"name":"SCHAR ORGANIC FOOD IMPEX","items":45,"rev7":611,"rev61":40879},{"name":"MERRIES \"Stoneville\"","items":1,"rev7":600,"rev61":4104},{"name":"MAMAKO \"BABY FACE\"","items":1,"rev7":575,"rev61":27779},{"name":"MUNCHKIN","items":5,"rev7":425,"rev61":1772},{"name":"Asmir \"Asmir Gluten Free\"","items":6,"rev7":420,"rev61":3798},{"name":"Игрушки ISMAILOV'S SMART TOYS","items":16,"rev7":333,"rev61":4276},{"name":"YUMEARTH Леденцы AB PHARMA","items":4,"rev7":280,"rev61":7583},{"name":"Relaxmamauz Biryukova L D","items":8,"rev7":235,"rev61":9510},{"name":"WELEDA PRIMAVERA TRADE","items":7,"rev7":210,"rev61":6068},{"name":"Симилак Малоежка Pharmaxi","items":6,"rev7":198,"rev61":23010},{"name":"Сушеные фрукты BIORGANIC STORE","items":18,"rev7":185,"rev61":15380}],"items":{"KABRITA":[{"a":"11599","n":"Kabrita 1 GOLD 400 гр смесь","q":4,"r":1198,"o":2},{"a":"11597","n":"Kabrita 1 GOLD 800 гр смесь","q":3,"r":1618,"o":3},{"a":"11601","n":"Kabrita 3 GOLD 800 гр напиток 12+","q":3,"r":1612,"o":5},{"a":"11600","n":"Kabrita 2 GOLD 800 гр смесь 6+","q":2,"r":1079,"o":5},{"a":"2225","n":"Kabrita 4 GOLD 800 гр напиток 3+","q":2,"r":1079,"o":3},{"a":"1849","n":"Kabrita Мультизлаковая каша козье молоко","q":5,"r":554,"o":2},{"a":"4811","n":"Kabrita Печенье детское 6+ козье молоко","q":3,"r":168,"o":2},{"a":"11594","n":"Kabrita Гречневая каша козье молоко яблоко","q":2,"r":185,"o":2},{"a":"11595","n":"Kabrita Гречневая каша козье молоко 4 мес","q":2,"r":173,"o":1},{"a":"1851","n":"Kabrita Овсяная каша козье молоко банан","q":1,"r":87,"o":1}],"JOONIES \"Mari Pharm\" и \"Univation\"":[{"a":"4913","n":"Трусики JOONIES Premium Soft XL 38","q":4,"r":800,"o":4},{"a":"101919","n":"Joonies влажные салфетки МИНИ","q":5,"r":475,"o":5}],"Фруто Няня и Вода Боржоми \"Sayonar\"":[{"a":"4985","n":"ФрутоНяня Батончик Злаков-фрукт Яблоко 25г","q":9,"r":254,"o":12},{"a":"100097","n":"ФрутоНяня Мини-Хлебцы рисовые с яблоком 30г","q":8,"r":225,"o":10},{"a":"100096","n":"ФрутоНяня Мини-Хлебцы Рисовые с яблоком","q":4,"r":180,"o":6},{"a":"100701","n":"ФрутоПаффсы Мультизлак. звездочки 21гр","q":13,"r":210,"o":9}],"Kim&Kimmy \"Baby Pro\"":[{"a":"101027","n":"Подгузники трусики Kim&Kimmy р.5 12-17кг","q":3,"r":780,"o":2},{"a":"101028","n":"Подгузники трусики Kim&Kimmy р.6","q":1,"r":260,"o":1}],"TOMIKO \"MEDICINE INVESTMENT\" MCHJ":[{"a":"101179","n":"Подгузники TOMIKO XL 13+ кг 42 шт","q":1,"r":172,"o":1},{"a":"11398","n":"Трусики-подгузники MERRIES р-р XL","q":2,"r":600,"o":1}],"SCHAR ORGANIC FOOD IMPEX":[{"a":"100614","n":"Флёр Альпин каша Органик Овсяно-кукурузная","q":4,"r":361,"o":2},{"a":"100615","n":"Флёр Альпин каша Органик Гречневая","q":3,"r":280,"o":2},{"a":"10843","n":"Флёр Альпин каша Органик кукурузная","q":7,"r":618,"o":5},{"a":"10784","n":"Fleur Alpine каша Органик Овсяная 5 мес","q":7,"r":622,"o":8},{"a":"11485","n":"Флёр Альпин каша Органик Три злака 6 мес","q":6,"r":558,"o":2},{"a":"10785","n":"Флёр Альпин каша Органик рисовая гипоалл.","q":1,"r":94,"o":1}],"MAMAKO \"BABY FACE\"":[{"a":"100714","n":"МАМАКО 2 Premium 2'FL 6-12 мес 800г","q":1,"r":575,"o":2}],"YUMEARTH Леденцы AB PHARMA":[{"a":"101104","n":"083 Леденцы YUMEARTH 620гр фруктовый","q":14,"r":2400,"o":27},{"a":"101100","n":"Мармелад YUMEARTH fruit snacks 50г","q":8,"r":480,"o":2}]}},"own":{"metrics":{"total":67,"rev61":212.3,"rev7":25.2,"brands":{"Бабушкино лукошко":{"items":36,"rev61":73.9},"Флёр Альпин":{"items":30,"rev61":110.7},"Зёвушка (Кокон)":{"items":1,"rev61":27.7}}},"warehouse":[{"a":"408","b":"Флёр Альпин","n":"Печенье Органик Первое с яблочным соком Fleur Alpine","q":36,"r":2886,"o":18.4,"abc":"A"},{"a":"4797","b":"Флёр Альпин","n":"Печенье детское Органик Банановое Fleur Alpine","q":10,"r":790,"o":4.5,"abc":"A"},{"a":"10784","b":"Флёр Альпин","n":"Fleur Alpine каша Органик Овсяная 5 мес 175г","q":7,"r":622,"o":5.1,"abc":"A"},{"a":"10843","b":"Флёр Альпин","n":"Флёр Альпин - каша Органик кукурузная с пребиотиком","q":7,"r":618,"o":4.9,"abc":"A"},{"a":"11485","b":"Флёр Альпин","n":"Флёр Альпин - каша Органик Три злака 6 мес 175г","q":6,"r":558,"o":2.4,"abc":"A"},{"a":"10785","b":"Флёр Альпин","n":"Флёр Альпин - каша Органик рисовая гипоаллергенная","q":1,"r":94,"o":1.0,"abc":"B"},{"a":"10843","b":"Флёр Альпин","n":"Флёр Альпин - каша Органик кукурузная","q":4,"r":360,"o":2.8,"abc":"A"},{"a":"10784","b":"Флёр Альпин","n":"Флёр Альпин - каша Органик Овсяная","q":4,"r":351,"o":2.2,"abc":"A"},{"a":"4995","b":"Бабушкино лукошко","n":"Бабушкино лукошко пюре рагу с говядиной 100г","q":21,"r":590,"o":6.0,"abc":"A"},{"a":"10205","b":"Бабушкино лукошко","n":"Бабушкино лукошко Пюре из цыпленка 100г","q":9,"r":333,"o":3.1,"abc":"A"},{"a":"4998","b":"Бабушкино лукошко","n":"Бабушкино лукошко рагу овощное с индейкой 100г","q":13,"r":359,"o":7.3,"abc":"A"},{"a":"40","b":"Бабушкино лукошко","n":"Бабушкино лукошко Пюре из яблок с творогом 100г","q":10,"r":242,"o":8.2,"abc":"A"},{"a":"42","b":"Бабушкино лукошко","n":"Бабушкино лукошко Пюре из груш с творогом 100г","q":13,"r":315,"o":3.0,"abc":"A"},{"a":"11827","b":"Бабушкино лукошко","n":"Пюре цветная капуста с кроликом 100г","q":10,"r":281,"o":0,"abc":"A"},{"a":"10203","b":"Бабушкино лукошко","n":"Бабушкино лукошко Пюре из говядины 100г","q":10,"r":260,"o":12.4,"abc":"A"},{"a":"183","b":"Зёвушка (Кокон)","n":"Матрас кокон Зёвушка","q":2,"r":3390,"o":0,"abc":"A"}]}};
+
+// ===================== STATE =====================
+let currentStream = 'gp';
+let currentPage = 'dash';
+const pages = {
+  gp:  ['dash', 'c1', 'nm', 'turk', 'wb'],
+  ext: ['sup-dash', 'kabrita', 'joonies', 'fruto', 'schar', 'yumearth'],
+  own: ['own-dash', 'bl', 'fa', 'kk']
+};
+const pageNames = {
+  dash:'Дашборд', c1:'Филиал Ц1', nm:'Филиал Новомосковская',
+  turk:'Филиал Туркменская', wb:'Филиал Welcome baby',
+  'sup-dash':'Дашборд поставщиков', kabrita:'KABRITA',
+  joonies:'JOONIES', fruto:'Фруто Няня', schar:'SCHAR',
+  yumearth:'YUMEARTH', 'own-dash':'Дашборд',
+  bl:'Бабушкино лукошко', fa:'Флёр Альпин', kk:'Зёвушка (Кокон)'
+};
+const stores = ['Ц1','Новомосковская','Туркменская','Welcome baby'];
+const storeKeys = ['c1','nm','turk','wb'];
+
+// ===================== HELPERS =====================
+const h = s => s < 0 ? `<span class="neg">${s}</span>` : s;
+const rv = (v, cls='pos-val') => v > 0 ? `<span class="${cls}">${v.toLocaleString('ru')}</span>` : '—';
+const bdg = abc => `<span class="badge ${abc}">${abc}</span>`;
+const orderCell = (o, urgent) => o > 0
+  ? `<input class="inp${urgent?' urgent':''}" value="${o}" type="number" min="0">`
+  : `<span style="color:var(--hint);font-size:11px;">—</span>`;
+const bBadge = b => `<span class="brand-badge ${b.includes('Баб')?'brand-bl':b.includes('Флёр')?'brand-fa':'brand-kk'}">${b}</span>`;
+const dl = (csv, name) => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download = name; a.click();
+};
+
+// ===================== STREAM SWITCH =====================
+function switchStream(id, el) {
+  currentStream = id;
+  document.querySelectorAll('.stream-tab').forEach(t => t.classList.remove('act'));
+  el.classList.add('act');
+  buildSidebar();
+  navigateTo(id === 'gp' ? 'dash' : id === 'ext' ? 'sup-dash' : 'own-dash');
+}
+
+// ===================== SIDEBAR =====================
+function buildSidebar() {
+  const sb = document.getElementById('sidebar');
+  if (currentStream === 'gp') {
+    sb.innerHTML = `
+      <div class="sidebar-section"><div class="sidebar-label">Обзор</div>
+        <div class="nav-item act" onclick="navigateTo('dash',this)"><i class="ti ti-dashboard"></i><span class="nav-label">Дашборд</span></div>
+      </div>
+      <div class="sidebar-section"><div class="sidebar-label">Заказы в филиалы</div>
+        <div class="nav-item" onclick="navigateTo('c1',this)"><i class="ti ti-map-pin"></i><span class="nav-label">Филиал Ц1</span></div>
+        <div class="nav-item" onclick="navigateTo('nm',this)"><i class="ti ti-map-pin"></i><span class="nav-label">Новомосковская</span><span class="nav-cnt red">3</span></div>
+        <div class="nav-item" onclick="navigateTo('turk',this)"><i class="ti ti-map-pin"></i><span class="nav-label">Туркменская</span><span class="nav-cnt red">3</span></div>
+        <div class="nav-item" onclick="navigateTo('wb',this)"><i class="ti ti-map-pin"></i><span class="nav-label">Welcome baby</span><span class="nav-cnt red">3</span></div>
+      </div>`;
+  } else if (currentStream === 'ext') {
+    const topSups = D.ext.suppliers.slice(0, 8);
+    sb.innerHTML = `
+      <div class="sidebar-section"><div class="sidebar-label">Обзор</div>
+        <div class="nav-item act" onclick="navigateTo('sup-dash',this)"><i class="ti ti-dashboard"></i><span class="nav-label">Все поставщики</span><span class="nav-cnt red">57</span></div>
+      </div>
+      <div class="sidebar-section"><div class="sidebar-label">Топ поставщики</div>
+        ${topSups.map(s => {
+          const key = s.name.split(' ')[0].toLowerCase().replace(/[^a-z]/g,'');
+          return `<div class="nav-item" onclick="navigateSupplier('${s.name}',this)"><i class="ti ti-truck"></i><span class="nav-label" title="${s.name}">${s.name.split('"')[0].trim().slice(0,20)}</span><span class="nav-cnt">${s.items}</span></div>`;
+        }).join('')}
+      </div>`;
+  } else {
+    sb.innerHTML = `
+      <div class="sidebar-section"><div class="sidebar-label">Обзор</div>
+        <div class="nav-item act" onclick="navigateTo('own-dash',this)"><i class="ti ti-dashboard"></i><span class="nav-label">Дашборд</span></div>
+      </div>
+      <div class="sidebar-section"><div class="sidebar-label">Бренды</div>
+        <div class="nav-item" onclick="navigateTo('bl',this)"><i class="ti ti-leaf"></i><span class="nav-label">Бабушкино лукошко</span><span class="nav-cnt blue">36</span></div>
+        <div class="nav-item" onclick="navigateTo('fa',this)"><i class="ti ti-leaf"></i><span class="nav-label">Флёр Альпин</span><span class="nav-cnt blue">30</span></div>
+        <div class="nav-item" onclick="navigateTo('kk',this)"><i class="ti ti-bed"></i><span class="nav-label">Зёвушка (Кокон)</span></div>
+      </div>`;
+  }
+}
+
+// ===================== NAVIGATION =====================
+function navigateTo(pid, el) {
+  currentPage = pid;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('act'));
+  if (el) el.classList.add('act');
+  document.getElementById('page-title').textContent = pageNames[pid] || pid;
+  renderPage(pid);
+}
+
+function navigateSupplier(name, el) {
+  currentPage = 'sup-' + name;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('act'));
+  if (el) el.classList.add('act');
+  document.getElementById('page-title').textContent = name;
+  document.getElementById('page-sub').textContent = `Заказ поставщику · ${D.ext.suppliers.find(s=>s.name===name)?.items||''} позиций`;
+  renderSupplierPage(name);
+}
+
+// ===================== RENDER PAGES =====================
+function renderPage(pid) {
+  const c = document.getElementById('content');
+  document.getElementById('page-sub').textContent = '';
+  document.getElementById('page-actions').innerHTML = '';
+
+  if (pid === 'dash') { renderGPDash(c); }
+  else if (['c1','nm','turk','wb'].includes(pid)) { renderGPStore(c, pid); }
+  else if (pid === 'sup-dash') { renderExtDash(c); }
+  else if (pid === 'own-dash') { renderOwnDash(c); }
+  else if (pid === 'bl') { renderOwnBrand(c, 'Бабушкино лукошко'); }
+  else if (pid === 'fa') { renderOwnBrand(c, 'Флёр Альпин'); }
+  else if (pid === 'kk') { renderOwnBrand(c, 'Зёвушка (Кокон)'); }
+}
+
+// ===================== GP DASHBOARD =====================
+function renderGPDash(c) {
+  const neg = D.gp.critical.length;
+  document.getElementById('page-sub').textContent = 'Прогноз на 2 дня · заказ 4× в неделю · данные 01.04–31.05.2026';
+  c.innerHTML = `
+    <div class="metrics-row">
+      <div class="metric green"><div class="metric-label">Выручка / 61 день</div><div class="metric-value">601 М</div><div class="metric-sub">UZS · Готовая продукция</div></div>
+      <div class="metric green"><div class="metric-label">Позиций к заказу</div><div class="metric-value">58</div><div class="metric-sub">прогноз на 2 дня</div></div>
+      <div class="metric red"><div class="metric-label">Отрицат. остаток</div><div class="metric-value">${neg}</div><div class="metric-sub">позиций — срочно!</div></div>
+      <div class="metric amber"><div class="metric-label">Выручка / 7 дней</div><div class="metric-value">54.7 М</div><div class="metric-sub">все 4 филиала</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card"><div class="card-header"><span class="card-title">Выручка ГП / 7 дней по магазинам</span></div>
+        <div style="padding:12px 16px;"><div class="chart-wrap" style="height:170px;"><canvas id="gp-rev-chart"></canvas></div></div></div>
+      <div class="card"><div class="card-header"><span class="card-title">Топ-5 продуктов / ср.день (все магазины)</span></div>
+        <div style="padding:12px 16px;"><div class="chart-wrap" style="height:170px;"><canvas id="gp-top-chart"></canvas></div></div></div>
+    </div>
+    <div class="card"><div class="card-header">
+        <span class="card-title"><i class="ti ti-alert-circle" style="color:var(--r);margin-right:6px;vertical-align:-2px;"></i>Критично: отрицательный остаток (по убыванию выручки)</span>
+        <button class="btn sm" onclick="exportGPCritical()"><i class="ti ti-download"></i> CSV</button>
+      </div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Наименование</th><th>Магазин</th><th>Остаток</th><th>Ср./день</th><th>Выр./нед, тыс.</th><th>Рек. заказ (2д)</th></tr></thead>
+        <tbody>${D.gp.critical.map(r=>`<tr>
+          <td>${r.n}</td><td>${r.st}</td><td class="neg">${r.s}</td>
+          <td style="color:var(--muted)">${r.d}</td>
+          <td>${rv(r.r)}</td>
+          <td><span class="order-tag urgent">${r.o}</span></td>
+        </tr>`).join('')}</tbody>
+      </table></div></div>`;
+  setTimeout(() => {
+    new Chart(document.getElementById('gp-rev-chart'), {type:'bar', data:{
+      labels:['Ц1','Новомосковская','Туркменская','Welcome baby'],
+      datasets:[{data:[12.8,20.9,10.3,10.7],backgroundColor:['#1a6b4a','#f0a500','#3a86d6','#9b59b6'],borderRadius:4,borderSkipped:false}]
+    }, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'rgba(128,128,128,0.08)'},ticks:{font:{size:10}}}}}});
+    new Chart(document.getElementById('gp-top-chart'), {type:'bar', data:{
+      labels:['Котл.лосось','Котл.кролик','Фрик.кролик','Наггетсы','Котл.курица'],
+      datasets:[{data:[11.4,7.0,8.4,7.4,6.2],backgroundColor:'#1a6b4a',borderRadius:4,borderSkipped:false}]
+    }, options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(128,128,128,0.08)'},ticks:{font:{size:10}}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  }, 200);
+}
+
+// ===================== GP STORE PAGE =====================
+function renderGPStore(c, key) {
+  const storeMap = {c1:'Ц1',nm:'Новомосковская',turk:'Туркменская',wb:'Welcome baby'};
+  const store = storeMap[key];
+  const items = D.gp.stores[store] || [];
+  document.getElementById('page-sub').textContent = `Готовая продукция · заказ 4×/нед · прогноз на 2 дня`;
+  document.getElementById('page-actions').innerHTML = `
+    <button class="btn sm" onclick="exportGPStore('${store}')"><i class="ti ti-download"></i> CSV</button>
+    <button class="btn sm green"><i class="ti ti-send"></i> Отправить заказ</button>`;
+
+  const hasNeg = items.filter(r => r.s < 0).length;
+  c.innerHTML = `
+    ${hasNeg ? `<div class="alert-box alert-danger"><i class="ti ti-alert-triangle"></i><div>${hasNeg} позиций с отрицательным остатком — требуют немедленного заказа</div></div>` : ''}
+    <div class="alert-box alert-info"><i class="ti ti-info-circle"></i><div>Рекомендованный заказ = среднедневные продажи × 2 − текущий остаток. Заказ 4 раза в неделю.</div></div>
+    <div class="frow">
+      <select class="sel" id="gp-flt" onchange="filterGPStore('${key}')">
+        <option value="all">Все позиции</option>
+        <option value="need">Только к заказу</option>
+        <option value="neg">Отрицательные</option>
+      </select>
+      <span style="margin-left:auto;font-size:11px;color:var(--muted);" id="gp-store-cnt">${items.length} позиций</span>
+    </div>
+    <div class="card"><div class="tbl-scroll"><table>
+      <thead><tr><th>Арт.</th><th>Наименование</th><th>Ср./день</th><th>Кол./7д</th><th>Выр./7д, тыс.</th><th>Ост. филиал</th><th>Рек.(2д)</th></tr></thead>
+      <tbody id="gp-store-tb">${gpStoreRows(items, 'all')}</tbody>
+    </table></div></div>`;
+}
+
+function gpStoreRows(items, filt) {
+  let data = items;
+  if (filt === 'need') data = items.filter(r => r.o > 0);
+  if (filt === 'neg') data = items.filter(r => r.s < 0);
+  data = [...data].sort((a,b) => b.r - a.r);
+  return data.map(r => `<tr>
+    <td class="art-id">${r.a}</td>
+    <td>${r.n}</td>
+    <td style="color:var(--muted);font-family:var(--mono);font-size:11px;">${r.d}</td>
+    <td>${r.q}</td>
+    <td>${rv(r.r)}</td>
+    <td>${h(r.s)}</td>
+    <td>${orderCell(r.o, r.s < 0)}</td>
+  </tr>`).join('');
+}
+
+function filterGPStore(key) {
+  const storeMap = {c1:'Ц1',nm:'Новомосковская',turk:'Туркменская',wb:'Welcome baby'};
+  const items = D.gp.stores[storeMap[key]] || [];
+  const filt = document.getElementById('gp-flt').value;
+  const tb = document.getElementById('gp-store-tb');
+  if (tb) tb.innerHTML = gpStoreRows(items, filt);
+  const cnt = document.getElementById('gp-store-cnt');
+  const vis = filt === 'need' ? items.filter(r=>r.o>0) : filt === 'neg' ? items.filter(r=>r.s<0) : items;
+  if (cnt) cnt.textContent = vis.length + ' позиций';
+}
+
+// ===================== EXT DASH =====================
+function renderExtDash(c) {
+  document.getElementById('page-sub').textContent = `57 поставщиков · 755 позиций к заказу`;
+  document.getElementById('page-actions').innerHTML = `
+    <button class="btn sm" onclick="exportAllExt()"><i class="ti ti-download"></i> Экспорт всех CSV</button>`;
+  const sups = D.ext.suppliers;
+  c.innerHTML = `
+    <div class="metrics-row">
+      <div class="metric red"><div class="metric-label">Поставщиков</div><div class="metric-value">57</div><div class="metric-sub">нужен заказ</div></div>
+      <div class="metric red"><div class="metric-label">Позиций к заказу</div><div class="metric-value">755</div><div class="metric-sub">по всем магазинам</div></div>
+      <div class="metric green"><div class="metric-label">Выручка / 61д</div><div class="metric-value">464 М</div><div class="metric-sub">UZS</div></div>
+      <div class="metric amber"><div class="metric-label">Выручка / 7 дней</div><div class="metric-value">44.6 М</div><div class="metric-sub">UZS</div></div>
+    </div>
+    <div class="alert-box alert-warn"><i class="ti ti-info-circle"></i><div>Нажми на поставщика чтобы открыть список позиций. Кнопка CSV — отдельный файл для отправки поставщику.</div></div>
+    ${sups.map(s => supCard(s)).join('')}`;
+}
+
+function supCard(s) {
+  const items = D.ext.items[s.name] || [];
+  const itemRows = items.length ? items.map(r => `<tr>
+    <td class="art-id">${r.a}</td><td>${r.n}</td><td>${r.q}</td>
+    <td>${rv(r.r)}</td><td><input class="inp" value="${r.o}" type="number" min="0"></td>
+  </tr>`).join('') : `<tr><td colspan="5" style="color:var(--hint);padding:10px;font-size:11px;">Загрузите файл 1С для отображения позиций</td></tr>`;
+
+  return `<div class="sup-card">
+    <div class="sup-card-head" onclick="toggleSup(this)">
+      <div class="sup-card-icon"><i class="ti ti-truck"></i></div>
+      <div style="flex:1;min-width:0;">
+        <div class="sup-name">${s.name}</div>
+        <div class="sup-meta">${s.items} позиций к заказу · Выр. 61д: ${(s.rev61/1000).toFixed(0)} тыс.</div>
+      </div>
+      <div class="sup-stats">
+        <div class="sup-rev7">${s.rev7.toLocaleString('ru')} тыс.</div>
+        <div class="sup-items-cnt">выр./нед</div>
+      </div>
+      <div class="sup-actions">
+        <button class="btn sm" onclick="event.stopPropagation();exportSup('${s.name.replace(/'/g,"\\'")}')"><i class="ti ti-download"></i> CSV</button>
+        <i class="ti ti-chevron-down chevron"></i>
+      </div>
+    </div>
+    <div class="sup-body">
+      <table><thead><tr><th>Арт.</th><th>Наименование</th><th>Кол./7д</th><th>Выр./7д, тыс.</th><th>Заказ</th></tr></thead>
+      <tbody>${itemRows}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function renderSupplierPage(name) {
+  const s = D.ext.suppliers.find(x => x.name === name);
+  const items = D.ext.items[name] || [];
+  document.getElementById('page-actions').innerHTML = `
+    <button class="btn sm" onclick="exportSup('${name.replace(/'/g,"\\'")}')"><i class="ti ti-download"></i> CSV заявка</button>
+    <button class="btn sm red"><i class="ti ti-send"></i> Отправить заявку</button>`;
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div class="metrics-row">
+      <div class="metric red"><div class="metric-label">Позиций к заказу</div><div class="metric-value">${s?.items||'—'}</div><div class="metric-sub">этот поставщик</div></div>
+      <div class="metric green"><div class="metric-label">Выручка / 61д</div><div class="metric-value">${s?(s.rev61/1000).toFixed(0):0} тыс.</div><div class="metric-sub">UZS</div></div>
+      <div class="metric amber"><div class="metric-label">Выручка / 7 дней</div><div class="metric-value">${s?s.rev7.toLocaleString('ru'):0} тыс.</div><div class="metric-sub">UZS</div></div>
+      <div class="metric"><div class="metric-label">Статус</div><div class="metric-value" style="font-size:14px;color:var(--r);">К заказу</div><div class="metric-sub">ожидает отправки</div></div>
+    </div>
+    <div class="card"><div class="card-header"><span class="card-title">Список позиций к заказу</span></div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Арт.</th><th>Наименование</th><th>Кол./7д</th><th>Выр./7д, тыс.</th><th>Рек. заказ</th></tr></thead>
+        <tbody>${items.length ? items.map(r=>`<tr>
+          <td class="art-id">${r.a}</td><td>${r.n}</td><td>${r.q}</td>
+          <td>${rv(r.r)}</td><td><input class="inp" value="${r.o}" type="number" min="0"></td>
+        </tr>`).join('') : `<tr><td colspan="5" style="color:var(--hint);padding:14px;">Загрузите файл 1С</td></tr>`}
+        </tbody>
+      </table></div>
+    </div>`;
+}
+
+function toggleSup(head) {
+  const body = head.nextElementSibling;
+  const ch = head.querySelector('.chevron');
+  body.classList.toggle('open');
+  ch?.classList.toggle('open');
+}
+
+// ===================== OWN DASH =====================
+function renderOwnDash(c) {
+  document.getElementById('page-sub').textContent = 'Бабушкино лукошко · Флёр Альпин · Зёвушка — заказ 2× в неделю';
+  document.getElementById('page-actions').innerHTML = `
+    <button class="btn sm" onclick="exportOwn()"><i class="ti ti-download"></i> CSV заказ</button>`;
+  c.innerHTML = `
+    <div class="metrics-row">
+      <div class="metric blue"><div class="metric-label">Выручка / 61д</div><div class="metric-value">212 М</div><div class="metric-sub">UZS · 3 бренда</div></div>
+      <div class="metric blue"><div class="metric-label">К заказу на склад</div><div class="metric-value">67</div><div class="metric-sub">SKU</div></div>
+      <div class="metric"><div class="metric-label">Флёр Альпин</div><div class="metric-value" style="color:var(--b);">111 М</div><div class="metric-sub">30 SKU · приоритет А</div></div>
+      <div class="metric"><div class="metric-label">Бабушкино лукошко</div><div class="metric-value" style="color:var(--g);">74 М</div><div class="metric-sub">36 SKU</div></div>
+    </div>
+    <div class="card"><div class="card-header">
+        <span class="card-title">Заказ на склад Pharmed — пополнение (2 недели запас)</span>
+        <div style="display:flex;gap:6px;">
+          <select class="sel" id="own-brand-flt" onchange="filterOwn()">
+            <option value="all">Все бренды</option>
+            <option value="Флёр Альпин">Флёр Альпин</option>
+            <option value="Бабушкино лукошко">Бабушкино лукошко</option>
+            <option value="Зёвушка (Кокон)">Зёвушка (Кокон)</option>
+          </select>
+          <select class="sel" id="own-need-flt" onchange="filterOwn()">
+            <option value="all">Все</option>
+            <option value="need">Только к заказу</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Арт.</th><th>Бренд</th><th>Наименование</th><th>Кол./7д</th><th>Выр./7д, тыс.</th><th>Рек. заказ (2нед)</th><th>ABC</th></tr></thead>
+        <tbody id="own-tb">${ownRows(D.own.warehouse,'all','all')}</tbody>
+      </table></div>
+    </div>`;
+}
+
+function ownRows(data, brand, need) {
+  let d = data;
+  if (brand !== 'all') d = d.filter(r => r.b === brand);
+  if (need === 'need') d = d.filter(r => r.o > 0);
+  return d.map(r => `<tr>
+    <td class="art-id">${r.a}</td>
+    <td>${bBadge(r.b)}</td>
+    <td>${r.n}</td>
+    <td>${r.q}</td>
+    <td>${rv(r.r,'blue-val')}</td>
+    <td>${r.o > 0 ? `<input class="inp" value="${r.o}" type="number" min="0">` : `<span style="color:var(--hint);font-size:11px;">достаточно</span>`}</td>
+    <td>${bdg(r.abc)}</td>
+  </tr>`).join('');
+}
+
+function filterOwn() {
+  const tb = document.getElementById('own-tb');
+  if (!tb) return;
+  const brand = document.getElementById('own-brand-flt').value;
+  const need = document.getElementById('own-need-flt').value;
+  tb.innerHTML = ownRows(D.own.warehouse, brand, need);
+}
+
+function renderOwnBrand(c, brand) {
+  const items = D.own.warehouse.filter(r => r.b === brand);
+  document.getElementById('page-sub').textContent = `${items.length} SKU · заказ на склад Pharmed`;
+  document.getElementById('page-actions').innerHTML = `
+    <button class="btn sm" onclick="exportOwnBrand('${brand}')"><i class="ti ti-download"></i> CSV</button>
+    <button class="btn sm blue"><i class="ti ti-send"></i> Отправить заявку</button>`;
+  const rev = items.reduce((s,r) => s + r.r*4, 0);
+  const needOrder = items.filter(r => r.o > 0).length;
+  c.innerHTML = `
+    <div class="metrics-row">
+      <div class="metric blue"><div class="metric-label">SKU бренда</div><div class="metric-value">${items.length}</div><div class="metric-sub">позиций</div></div>
+      <div class="metric blue"><div class="metric-label">К заказу</div><div class="metric-value">${needOrder}</div><div class="metric-sub">позиций</div></div>
+      <div class="metric green"><div class="metric-label">Выр./месяц</div><div class="metric-value">${(rev/1000).toFixed(0)} тыс.</div><div class="metric-sub">UZS</div></div>
+      <div class="metric"><div class="metric-label">Бренд</div><div class="metric-value" style="font-size:13px;font-weight:600;color:var(--b);">${brand.split(' ')[0]}</div></div>
+    </div>
+    <div class="card"><div class="card-header"><span class="card-title">Позиции к заказу на Pharmed</span></div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Арт.</th><th>Наименование</th><th>Кол./7д</th><th>Выр./7д, тыс.</th><th>Рек. заказ (2нед)</th><th>ABC</th></tr></thead>
+        <tbody>${items.map(r=>`<tr>
+          <td class="art-id">${r.a}</td><td>${r.n}</td><td>${r.q}</td>
+          <td>${rv(r.r,'blue-val')}</td>
+          <td>${r.o > 0 ? `<input class="inp" value="${r.o}" type="number" min="0">` : `<span style="color:var(--hint);font-size:11px;">достаточно</span>`}</td>
+          <td>${bdg(r.abc)}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>`;
+}
+
+// ===================== EXPORT =====================
+function exportGPStore(store) {
+  const items = D.gp.stores[store] || [];
+  const h = ['Магазин','Арт.','Наименование','Ср/день','Кол 7д','Выр 7д тыс','Ост. филиал','Рек заказ'];
+  const rows = items.filter(r=>r.o>0).map(r=>[store,r.a,`"${r.n}"`,r.d,r.q,r.r,r.s,r.o]);
+  dl([h,...rows].map(r=>r.join(';')).join('\n'), `gp_${store}.csv`);
+}
+function exportGPCritical() {
+  const h = ['Наименование','Магазин','Остаток','Ср/день','Выр 7д тыс','Рек заказ'];
+  const rows = D.gp.critical.map(r=>[`"${r.n}"`,r.st,r.s,r.d,r.r,r.o]);
+  dl([h,...rows].map(r=>r.join(';')).join('\n'), 'gp_kritichno.csv');
+}
+function exportSup(name) {
+  const items = D.ext.items[name] || [];
+  if (!items.length) { alert('Нет данных. Загрузите файл 1С.'); return; }
+  const h = ['Арт.','Наименование','Кол 7д','Выр 7д тыс','Заказ'];
+  const rows = items.map(r=>[r.a,`"${r.n}"`,r.q,r.r,r.o]);
+  dl([h,...rows].map(r=>r.join(';')).join('\n'), `zakaz_${name.replace(/[^a-zа-яёА-ЯЁ0-9]/gi,'_').slice(0,30)}.csv`);
+}
+function exportAllExt() {
+  let csv = 'Поставщик;Арт.;Наименование;Кол 7д;Выр 7д тыс;Заказ\n';
+  for (const [name, items] of Object.entries(D.ext.items)) {
+    items.forEach(r => { csv += `"${name}";${r.a};"${r.n}";${r.q};${r.r};${r.o}\n`; });
+  }
+  dl(csv, 'vse_vneshn_postavschiki.csv');
+}
+function exportOwn() {
+  const h = ['Бренд','Арт.','Наименование','Кол 7д','Выр 7д тыс','Рек заказ','ABC'];
+  const rows = D.own.warehouse.filter(r=>r.o>0).map(r=>[r.b,r.a,`"${r.n}"`,r.q,r.r,r.o,r.abc]);
+  dl([h,...rows].map(r=>r.join(';')).join('\n'), 'svoya_distribuciya.csv');
+}
+function exportOwnBrand(brand) {
+  const items = D.own.warehouse.filter(r=>r.b===brand && r.o>0);
+  const h = ['Арт.','Наименование','Кол 7д','Выр 7д тыс','Рек заказ','ABC'];
+  const rows = items.map(r=>[r.a,`"${r.n}"`,r.q,r.r,r.o,r.abc]);
+  dl([h,...rows].map(r=>r.join(';')).join('\n'), `zakaz_${brand.replace(/ /g,'_')}.csv`);
+}
+function exportCurrent() {
+  if (currentStream === 'own') exportOwn();
+  else if (currentStream === 'ext') exportAllExt();
+  else { stores.forEach(s => exportGPStore(s)); }
+}
+
+// ===================== UPLOAD =====================
+let loadedFiles = {sales: false, stock: false};
+function fakeLoad(type) {
+  const dz = document.getElementById('dz-'+type);
+  dz.classList.add('file-loaded');
+  dz.querySelector('i').className = 'ti ti-circle-check';
+  dz.querySelector('.drop-zone-label').textContent = type === 'sales' ? '✓ Продажи загружены' : '✓ Остатки загружены';
+  loadedFiles[type] = true;
+  if (loadedFiles.sales && loadedFiles.stock) {
+    document.getElementById('load-btn').classList.remove('btn');
+    document.getElementById('load-btn').classList.add('btn','green');
+  }
+}
+function confirmLoad() {
+  document.querySelector('.upload-overlay').classList.remove('show');
+  loadedFiles = {sales: false, stock: false};
+  ['sales','stock'].forEach(t => {
+    const dz = document.getElementById('dz-'+t);
+    dz.classList.remove('file-loaded');
+    dz.querySelector('i').className = t==='sales'?'ti ti-file-spreadsheet':'ti ti-table';
+    dz.querySelector('.drop-zone-label').textContent = t==='sales'?'Продажи':'Остатки';
+  });
+  alert('Данные обновлены. В реальном приложении здесь произойдёт пересчёт из файлов 1С.');
+}
+
+// ===================== INIT =====================
+buildSidebar();
+navigateTo('dash');
+</script>
+</body>
+</html>
