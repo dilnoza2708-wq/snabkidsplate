@@ -370,7 +370,7 @@ function buildSB(){
       <div class="sbs">Склад → Филиалы</div>
       <div class="ni" onclick="goPage('ext-disp',this)"><i class="ti ti-building-warehouse"></i><span class="ni-l">Отгрузка Pharmed</span><span class="nc">${_B2.dispatch.length}</span></div>
       <div class="sbs">Заказ поставщикам</div>
-      ${_B2.sup_summary.slice(0,10).map(s=>`<div class="ni" onclick="goSup('${s.name.replace(/'/g,"\\'")}',this)"><i class="ti ti-truck"></i><span class="ni-l" title="${s.name}">${s.name.slice(0,20)}</span><span class="nc nc-r">${s.items}</span></div>`).join('')}`;
+      ${_B2.sup_summary.slice(0,12).map((s,i)=>`<div class="ni" data-sup="${i}" onclick="goSupByIdx(${i},this)"><i class="ti ti-truck"></i><span class="ni-l" title="${s.name}">${s.name.slice(0,20)}</span><span class="nc nc-r">${s.items}</span></div>`).join('')}`;
   } else {
     sb.innerHTML=`<div class="sbs">Обзор</div>
       <div class="ni ab" onclick="goPage('own-dash',this)"><i class="ti ti-dashboard"></i><span class="ni-l">Дашборд</span></div>
@@ -393,6 +393,14 @@ function goSup(name,el){
   if(el) el.classList.add('ae');
   document.getElementById('pt').textContent=name.length>32?name.slice(0,32)+'…':name;
   renderSupDetail(name);
+}
+
+function goSupByIdx(idx,el){
+  const s=_B2.sup_summary[idx];
+  if(!s) return;
+  document.querySelectorAll('.ni').forEach(n=>n.classList.remove('ag','ae','ab'));
+  if(el) el.classList.add('ae');
+  goSup(s.name,null);
 }
 
 // ==================== RENDER ====================
@@ -505,8 +513,8 @@ function renderExtDash(c){
   <div class="card"><div class="ch"><span class="ct">Поставщики по убыванию выручки / неделя</span></div>
     <div class="ts" style="max-height:340px;"><table>
       <thead><tr><th>Поставщик</th><th>Позиций</th><th>Выр./нед, тыс.сум</th><th>Telegram</th></tr></thead>
-      <tbody>${_B2.sup_summary.map(s=>`<tr>
-        <td style="font-weight:500;cursor:pointer;color:var(--r);" onclick="goSup('${s.name.replace(/'/g,"\\'")}',null)">${s.name}</td>
+      <tbody>${_B2.sup_summary.map((s,_i)=>`<tr>
+        <td style="font-weight:500;cursor:pointer;color:var(--r);" onclick="goSupByIdx(${_i},null)">${s.name}</td>
         <td>${s.items}</td>
         <td style="font-family:var(--mono);font-weight:500;">${s.rev7.toLocaleString('ru')}</td>
         <td><button class="btn sm tg" onclick="openTG('${s.name.replace(/'/g,"\\'")}')"><i class="ti ti-brand-telegram"></i> Telegram</button></td>
@@ -540,7 +548,8 @@ function renderSupDetail(name){
   const s=_B2.sup_summary.find(x=>x.name===name)||{items:0,rev7:0};
   const items=_B2.sup_detail[name]||[];
   document.getElementById('ps').textContent=`${items.length||s.items} позиций · ${s.rev7.toLocaleString('ru')} тыс.сум/нед`;
-  document.getElementById('pa').innerHTML=`<button class="btn sm" onclick="exportSup('${name.replace(/'/g,"\\'")}')"><i class="ti ti-download"></i> CSV</button><button class="btn sm tg" onclick="openTG('${name.replace(/'/g,"\\'")}')"><i class="ti ti-brand-telegram"></i> В Telegram</button>`;
+  const _safeIdx=_B2.sup_summary.findIndex(x=>x.name===name);
+  document.getElementById('pa').innerHTML=`<button class="btn sm" onclick="exportSup('${name.replace(/'/g,"\\'")}')" ><i class="ti ti-download"></i> CSV</button><button class="btn sm tg" onclick="openTG('${name.replace(/'/g,"\\'")}')" ><i class="ti ti-brand-telegram"></i> В Telegram</button>`;
   const c=document.getElementById('cnt');
   const storeHeaders=storeList.map(st=>`<th style="text-align:center;">${st}</th>`).join('');
   const rows=items.length?items.map(r=>{
