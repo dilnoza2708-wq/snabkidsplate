@@ -759,52 +759,69 @@ function handleFile(t, input) {
 }
 
 function parseSalesFile(ab) {
-  const wb = XLSX.read(ab, {type:'array', cellDates:false, sheetStubs:true});
-  const ws = wb.Sheets[wb.SheetNames[0]];
+  const wb = XLSX.read(ab, {type:'array', cellDates:false});
+  const wsName = wb.SheetNames[0];
+  const ws = wb.Sheets[wsName];
 
-  // Get sheet range
-  const ref = ws['!ref'] || 'A1:Z100';
-  const range = XLSX.utils.decode_range(ref);
-  const nRows = range.e.r + 1;
-  const nCols = range.e.c + 1;
+  // Use sheet_to_json but with raw:true to get actual cell values
+  const data = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const nRows = data.length;
 
-  // Helper: get cell value
-  function cell(r, c) {
-    const addr = XLSX.utils.encode_cell({r, c});
-    const cell = ws[addr];
-    return cell ? cell.v : null;
-  }
-
-  // Find date columns in row 8 (0-indexed)
-  const dateCols = [];
-  for (let c = 6; c < nCols; c += 2) {
-    const v = cell(8, c);
-    if (v && String(v).includes('202')) dateCols.push(c);
-  }
-  // Debug: show what we found
-  const debugRef = ws['!ref'] || 'MISSING';
-  const debugCell89 = ws[XLSX.utils.encode_cell({r:8, c:6})];
-  const debugVal = debugCell89 ? String(debugCell89.v).slice(0,20) : 'EMPTY';
-  if (dateCols.length === 0) {
-    alert('parseSalesFile ОШИБКА: даты не найдены\nRef: '+debugRef+'\nG9 cell: '+debugVal+'\nSheet: '+wb.SheetNames[0]);
+  if (nRows < 12) {
+    alert('Файл продаж: слишком мало строк (' + nRows + '). Проверьте формат выгрузки из 1С.');
     return {};
   }
-  alert('parseSalesFile: найдено '+dateCols.length+' дней\nRef: '+debugRef+'\nG9: '+debugVal+'\nnRows: '+nRows);
+
+  // AUTO-DETECT date row: scan rows 7-12 for row with many date-like values
+  let dateRowIdx = -1;
+  let dateCols = [];
+  for (let ri = 6; ri <= Math.min(12, nRows-1); ri++) {
+    const row = data[ri] || [];
+    const dCols = [];
+    for (let c = 4; c < row.length; c += 2) {
+      const v = row[c];
+      if (v == null) continue;
+      const s = String(v);
+      // Date string like "01.04.2026 г." or "01.06.2026 г."
+      if (/\d{2}\.\d{2}\.\d{4}/.test(s)) dCols.push(c);
+      // Also handle if SheetJS returns as Excel serial number
+      // Serial 46113 = 01.04.2026, range 45000-50000 covers 2023-2037
+      else if (typeof v === 'number' && v > 44000 && v < 50000) dCols.push(c);
+    }
+    if (dCols.length >= 30) { dateRowIdx = ri; dateCols = dCols; break; }
+  }
+
+  // Always use fallback if auto-detect failed
+  if (dateCols.length < 10) {
+    // Standard 1C format: dates at cols 6,8,10...126 in row idx=8
+    dateCols = [];
+    for (let c = 6; c <= 126; c += 2) dateCols.push(c);
+    dateRowIdx = 8;
+    console.warn('parseSalesFile: using fallback date cols 6..126');
+  }
+
   const nDays = dateCols.length;
   const last7Start = Math.max(0, nDays - 7);
-  console.log('parseSalesFile:', nDays, 'days, col', dateCols[0], '..', dateCols[nDays-1], 'rows:', nRows);
+  const dataStartRow = dateRowIdx + 3; // skip date row + qty/sum header row + empty row
+  console.log('parseSalesFile: dateRow=' + dateRowIdx + ', dateCols=' + nDays + 
+              ', first=' + dateCols[0] + ', last=' + dateCols[nDays-1] + 
+              ', dataStart=' + dataStartRow);
 
   const sales = {};
   let curCat = null, curStore = null;
+  let itemCount = 0, skippedCount = 0;
 
-  for (let r = 11; r < nRows; r++) {
-    const col0raw = cell(r, 0);
+  for (let i = dataStartRow; i < nRows; i++) {
+    const row = data[i];
+    if (!row) continue;
+
+    const col0raw = row[0];
     if (col0raw == null) continue;
     const col0 = String(col0raw).trim();
     if (!col0) continue;
     if (col0.startsWith('Итого') || col0 === 'Склад' || col0 === 'Номенклатура') continue;
 
-    const col4raw = cell(r, 4);
+    const col4raw = row[4];
 
     // Store row?
     const storeKey = Object.keys(STORES_MAP).find(k => k.trim() === col0);
@@ -813,9 +830,10 @@ function parseSalesFile(ab) {
       continue;
     }
 
-    // Item row — has артикул in col4
-    if (col4raw != null) {
-      if (!curStore) continue;  // no store context yet
+    // Item row — col4 has артикул (string or number)
+    const hasArt = (col4raw != null && col4raw !== '');
+    if (hasArt) {
+      if (!curStore) { skippedCount++; continue; }
       const art = String(col4raw).trim();
       const name = col0;
       if (isExcl(name)) continue;
@@ -824,8 +842,8 @@ function parseSalesFile(ab) {
       for (let di = 0; di < nDays; di++) {
         const qc = dateCols[di];
         const sc = qc + 1;
-        const q = parseFloat(cell(r, qc)) || 0;
-        const s = parseFloat(cell(r, sc)) || 0;
+        const q = (qc < row.length && row[qc] != null) ? (parseFloat(row[qc]) || 0) : 0;
+        const s = (sc < row.length && row[sc] != null) ? (parseFloat(row[sc]) || 0) : 0;
         qty61 += q; sum61 += s;
         if (di >= last7Start) { qty7 += q; sum7 += s; }
       }
@@ -838,6 +856,7 @@ function parseSalesFile(ab) {
       } else {
         sales[key] = {art, name, cat: curCat || '', store: curStore,
                       qty61, sum61, qty7, sum7};
+        itemCount++;
       }
     } else {
       // Category row — update curCat, reset curStore
@@ -846,32 +865,51 @@ function parseSalesFile(ab) {
     }
   }
 
-  console.log('parseSalesFile: done,', Object.keys(sales).length, 'records');
+  const total = Object.keys(sales).length;
+  console.log('parseSalesFile done: ' + total + ' records, skipped=' + skippedCount);
+  if (total === 0) {
+    alert('parseSalesFile: 0 записей!\nФайл: ' + wsName + 
+          '\nСтрок: ' + nRows + ', dataStart: ' + dataStartRow +
+          '\ndateCols: ' + nDays + ' (col ' + dateCols[0] + '..' + dateCols[nDays-1] + ')' +
+          '\ncurStore в конце: ' + curStore +
+          '\nПроверьте: файл выгружен как "Продажи по дням"?');
+  }
   return sales;
 }
 
 function parseStockFile(ab) {
-  const wb = XLSX.read(ab, {type:'array', cellDates:false, sheetStubs:true});
+  const wb = XLSX.read(ab, {type:'array', cellDates:false});
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const ref = ws['!ref'] || 'A1:Z100';
-  const range = XLSX.utils.decode_range(ref);
-  const nRows = range.e.r + 1;
+  const data = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const nRows = data.length;
 
-  function cell(r, c) {
-    const addr = XLSX.utils.encode_cell({r, c});
-    const cc = ws[addr];
-    return cc ? cc.v : null;
+  // AUTO-DETECT header row: find row with 'Артикул' or 'Номенклатура'
+  let headerRowIdx = 7; // default
+  for (let ri = 0; ri < Math.min(15, nRows); ri++) {
+    const row = data[ri] || [];
+    const r0 = row[0] ? String(row[0]).trim() : '';
+    const r3 = row[3] ? String(row[3]).trim() : '';
+    if (r0 === 'Артикул' || r3 === 'Номенклатура' || r0 === 'Код') {
+      headerRowIdx = ri;
+      break;
+    }
   }
+  const dataStartRow = headerRowIdx + 1;
+  console.log('parseStockFile: headerRow=' + headerRowIdx + ', dataStart=' + dataStartRow + ', rows=' + nRows);
 
   const stock = {}; // {art: {store: qty}}
   let curStore = null;
+  let itemCount = 0;
 
-  for (let r = 8; r < nRows; r++) {
-    const col0raw = cell(r, 0);
+  for (let r = dataStartRow; r < nRows; r++) {
+    const row = data[r];
+    if (!row) continue;
+
+    const col0raw = row[0];
     if (col0raw == null) continue;
     const col0 = String(col0raw).trim();
     if (!col0) continue;
-    if (col0.startsWith('Итого') || col0 === 'Артикул' || col0 === 'Ед. изм.') continue;
+    if (col0.startsWith('Итого') || col0 === 'Артикул' || col0 === 'Ед. изм.' || col0 === 'Код') continue;
 
     // Store row?
     const storeKey = Object.keys(STORES_MAP).find(k => k.trim() === col0);
@@ -880,53 +918,25 @@ function parseStockFile(ab) {
       continue;
     }
 
-    // Item row: col3 = name, col12 = unit
-    const col3 = cell(r, 3);
-    const col12 = cell(r, 12);
+    // Item row: col0=артикул, col3=name (not null), col12=unit
+    const col3 = row[3];
+    const col12 = row[12];
+    // Detect item row: has name in col3 AND unit in col12
     if (col3 != null && col12 != null && curStore) {
       const art = col0;
-      const qty = parseFloat(cell(r, 16)) || 0;
+      // col16 = конечный остаток
+      const qty = row[16] != null ? (parseFloat(row[16]) || 0) : 0;
       if (!stock[art]) stock[art] = {};
       stock[art][curStore] = qty;
+      itemCount++;
     } else if (col3 == null && col12 == null) {
-      // Could be category row — just reset store
-      if (!storeKey) curStore = null;
+      // Possibly category row - reset store if not a store name
+      const isStore = Object.keys(STORES_MAP).some(k => k.trim() === col0);
+      if (!isStore) curStore = null;
     }
   }
-  console.log('parseStockFile: done,', Object.keys(stock).length, 'articles');
-  return stock;
-}
 
-function parseStockFile(ab) {
-  const wb = XLSX.read(ab, {type:'array', cellDates:false});
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
-  // Structure: row 8 = header (col0=Артикул, col3=Наименование, col12=Ед, col16=Конечный остаток)
-  // Category rows: col3=null, col12=null
-  // Store rows: col0 = store name
-  // Item rows: col0=арт, col3=name, col12=ед, col16=qty
-
-  const stock = {}; // {art: {store: qty}}
-  let curCat = null, curStore = null;
-
-  for (let i = 8; i < data.length; i++) {
-    const row = data[i];
-    if (!row || row[0] == null) continue;
-    const col0 = String(row[0]).trim();
-    if (col0.startsWith('Итого') || col0 === 'Ед. изм.' || col0 === 'Артикул') continue;
-
-    const storeKey = Object.keys(STORES_MAP).find(k => k.trim() === col0);
-    if (storeKey) { curStore = STORES_MAP[storeKey]; continue; }
-
-    if (row[3] != null && row[12] != null) {
-      const art = col0;
-      const qty = parseFloat(row[16]) || 0;
-      if (!stock[art]) stock[art] = {};
-      if (curStore) stock[art][curStore] = qty;
-    } else {
-      if (!storeKey) { curCat = col0; curStore = null; }
-    }
-  }
+  console.log('parseStockFile done: ' + Object.keys(stock).length + ' articles, ' + itemCount + ' records');
   return stock;
 }
 
