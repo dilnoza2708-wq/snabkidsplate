@@ -868,11 +868,21 @@ function parseSalesFile(ab) {
   const total = Object.keys(sales).length;
   console.log('parseSalesFile done: ' + total + ' records, skipped=' + skippedCount);
   if (total === 0) {
-    alert('parseSalesFile: 0 записей!\nФайл: ' + wsName + 
-          '\nСтрок: ' + nRows + ', dataStart: ' + dataStartRow +
-          '\ndateCols: ' + nDays + ' (col ' + dateCols[0] + '..' + dateCols[nDays-1] + ')' +
-          '\ncurStore в конце: ' + curStore +
-          '\nПроверьте: файл выгружен как "Продажи по дням"?');
+    // Show first 20 col0 values to debug store names
+    const col0Samples = [];
+    for (let i = dataStartRow; i < Math.min(dataStartRow+60, nRows); i++) {
+      const r = data[i];
+      if (r && r[0] != null) {
+        const v = String(r[0]).trim().slice(0,30);
+        if (v && !v.startsWith('Итого') && col0Samples.indexOf(v)===-1) col0Samples.push(v);
+        if (col0Samples.length >= 15) break;
+      }
+    }
+    alert('parseSalesFile: 0 записей!\n' +
+          'Строк: ' + nRows + ', dataStart: ' + dataStartRow + '\n' +
+          'dateCols: ' + nDays + ' (col ' + dateCols[0] + '..' + dateCols[nDays-1] + ')\n\n' +
+          'Первые col0 значения:\n' + col0Samples.join('\n') + '\n\n' +
+          'Ожидаются: Филиал Ц1, Филиал Новомосковская...');
   }
   return sales;
 }
