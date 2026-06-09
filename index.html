@@ -781,10 +781,15 @@ function parseSalesFile(ab) {
     const v = cell(8, c);
     if (v && String(v).includes('202')) dateCols.push(c);
   }
+  // Debug: show what we found
+  const debugRef = ws['!ref'] || 'MISSING';
+  const debugCell89 = ws[XLSX.utils.encode_cell({r:8, c:6})];
+  const debugVal = debugCell89 ? String(debugCell89.v).slice(0,20) : 'EMPTY';
   if (dateCols.length === 0) {
-    console.error('parseSalesFile: no date columns found');
+    alert('parseSalesFile ОШИБКА: даты не найдены\nRef: '+debugRef+'\nG9 cell: '+debugVal+'\nSheet: '+wb.SheetNames[0]);
     return {};
   }
+  alert('parseSalesFile: найдено '+dateCols.length+' дней\nRef: '+debugRef+'\nG9: '+debugVal+'\nnRows: '+nRows);
   const nDays = dateCols.length;
   const last7Start = Math.max(0, nDays - 7);
   console.log('parseSalesFile:', nDays, 'days, col', dateCols[0], '..', dateCols[nDays-1], 'rows:', nRows);
