@@ -759,39 +759,59 @@ function handleFile(t, input) {
 }
 
 function parseSalesFile(ab) {
-  const wb = XLSX.read(ab, {type:'array', cellDates:false});
+  const wb = XLSX.read(ab, {type:'array', cellDates:false, sheetStubs:true});
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
 
-  // Find date columns: row index 8 (0-based), cols starting at 6, step 2
-  const dateRow = data[8] || [];
-  const dateCols = []; // [{col, date}]
-  for (let j = 6; j < dateRow.length; j += 2) {
-    const v = dateRow[j];
-    if (v && String(v).includes('2026')) dateCols.push(j);
+  // Get sheet range
+  const ref = ws['!ref'] || 'A1:Z100';
+  const range = XLSX.utils.decode_range(ref);
+  const nRows = range.e.r + 1;
+  const nCols = range.e.c + 1;
+
+  // Helper: get cell value
+  function cell(r, c) {
+    const addr = XLSX.utils.encode_cell({r, c});
+    const cell = ws[addr];
+    return cell ? cell.v : null;
+  }
+
+  // Find date columns in row 8 (0-indexed)
+  const dateCols = [];
+  for (let c = 6; c < nCols; c += 2) {
+    const v = cell(8, c);
+    if (v && String(v).includes('202')) dateCols.push(c);
+  }
+  if (dateCols.length === 0) {
+    console.error('parseSalesFile: no date columns found');
+    return {};
   }
   const nDays = dateCols.length;
   const last7Start = Math.max(0, nDays - 7);
+  console.log('parseSalesFile:', nDays, 'days, col', dateCols[0], '..', dateCols[nDays-1], 'rows:', nRows);
 
-  // Parse rows: row 11+ (index 11)
-  const sales = {}; // {art: {store, name, cat, qty_arr, sum_arr}}
+  const sales = {};
   let curCat = null, curStore = null;
 
-  for (let i = 11; i < data.length; i++) {
-    const row = data[i];
-    if (!row || !row[0]) continue;
-    const col0 = String(row[0]).trim();
-    const col4 = row[4];
+  for (let r = 11; r < nRows; r++) {
+    const col0raw = cell(r, 0);
+    if (col0raw == null) continue;
+    const col0 = String(col0raw).trim();
+    if (!col0) continue;
+    if (col0.startsWith('Итого') || col0 === 'Склад' || col0 === 'Номенклатура') continue;
 
-    if (col0.startsWith('Итого')) continue;
+    const col4raw = cell(r, 4);
 
-    // Store row
-    const storeKey = col0 in STORES_MAP ? col0 : Object.keys(STORES_MAP).find(k => k.trim() === col0);
-    if (storeKey) { curStore = STORES_MAP[storeKey]; continue; }
+    // Store row?
+    const storeKey = Object.keys(STORES_MAP).find(k => k.trim() === col0);
+    if (storeKey) {
+      curStore = STORES_MAP[storeKey];
+      continue;
+    }
 
-    // Item row
-    if (col4 != null && curStore) {
-      const art = String(col4).trim();
+    // Item row — has артикул in col4
+    if (col4raw != null) {
+      if (!curStore) continue;  // no store context yet
+      const art = String(col4raw).trim();
       const name = col0;
       if (isExcl(name)) continue;
 
@@ -799,21 +819,77 @@ function parseSalesFile(ab) {
       for (let di = 0; di < nDays; di++) {
         const qc = dateCols[di];
         const sc = qc + 1;
-        const q = parseFloat(row[qc]) || 0;
-        const s = parseFloat(row[sc]) || 0;
+        const q = parseFloat(cell(r, qc)) || 0;
+        const s = parseFloat(cell(r, sc)) || 0;
         qty61 += q; sum61 += s;
         if (di >= last7Start) { qty7 += q; sum7 += s; }
       }
       if (qty61 === 0 && sum61 === 0) continue;
 
       const key = art + '|' + curStore;
-      sales[key] = {art, name, cat: curCat||'', store: curStore, qty61, sum61, qty7, sum7};
-    } else if (col4 == null) {
-      if (!Object.keys(STORES_MAP).some(k => k.trim() === col0)) curCat = col0;
+      if (sales[key]) {
+        sales[key].qty61 += qty61; sales[key].sum61 += sum61;
+        sales[key].qty7  += qty7;  sales[key].sum7  += sum7;
+      } else {
+        sales[key] = {art, name, cat: curCat || '', store: curStore,
+                      qty61, sum61, qty7, sum7};
+      }
+    } else {
+      // Category row — update curCat, reset curStore
+      curCat = col0;
       curStore = null;
     }
   }
+
+  console.log('parseSalesFile: done,', Object.keys(sales).length, 'records');
   return sales;
+}
+
+function parseStockFile(ab) {
+  const wb = XLSX.read(ab, {type:'array', cellDates:false, sheetStubs:true});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const ref = ws['!ref'] || 'A1:Z100';
+  const range = XLSX.utils.decode_range(ref);
+  const nRows = range.e.r + 1;
+
+  function cell(r, c) {
+    const addr = XLSX.utils.encode_cell({r, c});
+    const cc = ws[addr];
+    return cc ? cc.v : null;
+  }
+
+  const stock = {}; // {art: {store: qty}}
+  let curStore = null;
+
+  for (let r = 8; r < nRows; r++) {
+    const col0raw = cell(r, 0);
+    if (col0raw == null) continue;
+    const col0 = String(col0raw).trim();
+    if (!col0) continue;
+    if (col0.startsWith('Итого') || col0 === 'Артикул' || col0 === 'Ед. изм.') continue;
+
+    // Store row?
+    const storeKey = Object.keys(STORES_MAP).find(k => k.trim() === col0);
+    if (storeKey) {
+      curStore = STORES_MAP[storeKey];
+      continue;
+    }
+
+    // Item row: col3 = name, col12 = unit
+    const col3 = cell(r, 3);
+    const col12 = cell(r, 12);
+    if (col3 != null && col12 != null && curStore) {
+      const art = col0;
+      const qty = parseFloat(cell(r, 16)) || 0;
+      if (!stock[art]) stock[art] = {};
+      stock[art][curStore] = qty;
+    } else if (col3 == null && col12 == null) {
+      // Could be category row — just reset store
+      if (!storeKey) curStore = null;
+    }
+  }
+  console.log('parseStockFile: done,', Object.keys(stock).length, 'articles');
+  return stock;
 }
 
 function parseStockFile(ab) {
@@ -850,6 +926,18 @@ function parseStockFile(ab) {
 }
 
 function processAndUpdate(salesData, stockData) {
+  // DEBUG
+  const allKeys = Object.keys(salesData);
+  console.log('processAndUpdate: total salesData keys:', allKeys.length);
+  if (allKeys.length > 0) {
+    const sample = salesData[allKeys[0]];
+    console.log('Sample record:', JSON.stringify(sample));
+    // Count by category
+    const catCounts = {};
+    for (const k of allKeys) { const c=salesData[k].cat; catCounts[c]=(catCounts[c]||0)+1; }
+    const top = Object.entries(catCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    console.log('Top cats:', JSON.stringify(top));
+  }
   // Build data structures same as Python backend
   // 1. Aggregate sales
   const byArtStore = {}; // {art: {store: {name,cat,qty61,sum61,qty7,sum7}}}
@@ -997,7 +1085,16 @@ function processAndUpdate(salesData, stockData) {
     const chip = document.querySelector('.chip');
     if (chip) chip.textContent = 'Данные обновлены ✓';
   }
-  alert(`✓ Данные загружены!\n• ГП: ${Object.values(newGP.stores).flat().length} позиций\n• Внешние: ${supSummary.length} поставщиков\n• Дистрибуция: ${Object.values(ownStores).flat().length} позиций`);
+  // Debug: what categories exist in salesData?
+  const catSample = {};
+  for (const k of Object.keys(salesData).slice(0, 200)) {
+    const cat = salesData[k].cat;
+    catSample[cat] = (catSample[cat]||0) + 1;
+  }
+  const catStr = Object.entries(catSample).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([c,n])=>c.slice(0,20)+':'+n).join(', ');
+  const totalSales = Object.keys(salesData).length;
+  const totalStock = Object.keys(stockData).length;
+  alert(`✓ Данные загружены!\n• ГП: ${Object.values(newGP.stores).flat().length} позиций\n• Внешние: ${supSummary.length} поставщиков\n• Дистрибуция: ${Object.values(ownStores).flat().length} позиций\n\nДебаг: продажи=${totalSales} записей, остатки=${totalStock} арт.\nТоп категории: ${catStr||'нет данных'}`);
 }
 
 function getBrandQuant(brand) {
